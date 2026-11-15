@@ -1,0 +1,5 @@
+# Despliegue
+
+Hay workflows manuales para staging y producción en `.github/workflows/deploy-staging.yml` y `deploy-production.yml`. Staging solo admite `developer` o `release/*`; producción solo admite `main`. Ambos vuelven a ejecutar formato, build y tests antes de publicar, autentican en App Service mediante OIDC y ejecutan un health check. No se ejecuta ningún deploy automáticamente.
+
+Para habilitarlos, primero confirmar SKU/cuotas/costos/región y crear recursos bajo autorización del propietario; definir las GitHub Environments `staging` y `production`; configurar variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME`, `AZURE_HEALTH_CHECK_URL` (por ejemplo, `https://<host-confirmado>/health`); crear credencial federada que restrinja repositorio/ambiente y rol al App Service; y establecer límites de rama de cada Environment. `/health` solo verifica disponibilidad básica del proceso, no dependencias como base de datos. `workflow_dispatch` es la aprobación operativa manual disponible para una sola persona; no hay reviewers humanos configurados ni despliegues ejecutados.

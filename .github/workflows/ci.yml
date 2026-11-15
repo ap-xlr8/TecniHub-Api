@@ -1,0 +1,40 @@
+name: Backend CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Restore, format, build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore TECNIHUB.sln
+
+      - name: Verify formatting
+        run: dotnet format TECNIHUB.sln --verify-no-changes --no-restore
+
+      - name: Audit packages
+        run: dotnet list TECNIHUB.sln package --vulnerable --include-transitive
+
+      - name: Build
+        run: dotnet build TECNIHUB.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test TECNIHUB.sln --configuration Release --no-build --logger "trx;LogFileName=backend-tests.trx"

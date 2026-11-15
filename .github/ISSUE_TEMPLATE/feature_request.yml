@@ -1,0 +1,21 @@
+name: Solicitud de funcionalidad
+description: Proponer una necesidad de producto para revisión
+title: "feat: "
+body:
+  - type: textarea
+    id: user-need
+    attributes:
+      label: Necesidad y usuario
+      description: Incluye la historia o referencia aprobada; las propuestas no se consideran requisito hasta revisarse.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación propuestos
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Restricciones, seguridad y datos

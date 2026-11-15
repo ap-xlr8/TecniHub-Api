@@ -1,0 +1,16 @@
+name: Tarea técnica
+description: Registrar trabajo de ingeniería sin crear alcance de negocio
+title: "chore: "
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objetivo y motivo
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Evidencia o criterio de terminado
+    validations:
+      required: true

@@ -1,0 +1,6 @@
+@TECNIHUB.API_HostAddress = http://localhost:5204
+
+GET {{TECNIHUB.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
