@@ -40,6 +40,25 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30)
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var sub = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!Guid.TryParse(sub, out var userId))
+                {
+                    context.Fail("invalid_subject");
+                    return;
+                }
+
+                var authRepository = context.HttpContext.RequestServices
+                    .GetRequiredService<TECNIHUB.Application.Abstractions.IAuthRepository>();
+                if (!await authRepository.IsUserActiveAsync(userId, context.HttpContext.RequestAborted))
+                {
+                    context.Fail("account_inactive");
+                }
+            }
+        };
     });
 
 builder.Services.AddAuthorizationBuilder()
@@ -52,6 +71,30 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("AuthRateLimit", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Environment.IsDevelopment() ? 120 : 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("MediaUploadRateLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Environment.IsDevelopment() ? 60 : 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("ChatRateLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = builder.Environment.IsDevelopment() ? 120 : 30,
@@ -111,12 +154,18 @@ else
 }
 
 app.UseCors("FrontendPolicy");
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapHealthChecks("/health");
 app.MapAuthEndpoints();
+app.MapProfileEndpoints();
+app.MapPostalCodeEndpoints();
+app.MapMediaEndpoints();
+app.MapRepairRequestEndpoints();
+app.MapSparePartEndpoints();
+app.MapChatEndpoints();
 
 app.Run();
 

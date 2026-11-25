@@ -46,6 +46,14 @@ public sealed class User
         UpdatedAt = utcNow;
     }
 
+    public void UpdateBasicProfile(string firstName, string lastName, string? phone, DateTimeOffset utcNow)
+    {
+        FirstName = firstName;
+        LastName = lastName;
+        Phone = phone;
+        UpdatedAt = utcNow;
+    }
+
     public void RequestGradualDeletion(DateTimeOffset utcNow, TimeSpan retentionWindow)
     {
         Status = AccountStatus.PendingDeletion;

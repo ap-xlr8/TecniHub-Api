@@ -12,4 +12,18 @@ public sealed class TechnicianProfile
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public void UpdateDetails(
+        string specialties,
+        int experienceYears,
+        string serviceZone,
+        string? businessName,
+        DateTimeOffset utcNow)
+    {
+        Specialties = specialties;
+        ExperienceYears = experienceYears;
+        ServiceZone = serviceZone;
+        BusinessName = businessName;
+        UpdatedAt = utcNow;
+    }
 }

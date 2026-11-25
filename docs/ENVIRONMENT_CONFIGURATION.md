@@ -22,9 +22,21 @@ No ejecutes estos ejemplos con marcadores textuales como si fueran credenciales 
 | `ConnectionStrings:DefaultConnection` | Privada | PostgreSQL local / Neon en despliegue |
 | `Jwt:SigningKey` | Secreto | Firma HMAC-SHA256 de tokens JWT y códigos de verificación |
 | `Smtp:Username` / `Smtp:Password` | Secreto | Envío de códigos de verificación y recuperación vía SMTP (Gmail App Password) |
-| `ImgBB:ApiKey` | Secreto | Pendiente de integración en Sprint 2; User Secrets local / variable protegida en despliegue |
+| `ImgBB:ApiKey` | Secreto | Activo en Sprint 2: carga segura de imágenes desde backend (User Secrets local / variable protegida en despliegue) |
 | `PushNotifications:Vapid:Subject` | Pública | No utilizada |
 | `PushNotifications:Vapid:PublicKey` | Pública | No utilizada |
 | `PushNotifications:Vapid:PrivateKey` | Secreto | Solo User Secrets local / almacén seguro de producción; no se crea ni consume todavía |
+
+## Catálogo SEPOMEX (`postal_codes`)
+
+El archivo oficial `CPdescarga.txt` de Correos de México (~15 MB) se mantiene fuera del repositorio Git y se importa a la tabla `postal_codes` mediante el script [import-sepomex.ps1](../scripts/import-sepomex.ps1):
+
+```powershell
+# Desarrollo local (contenedor Docker tecnihub-postgres-dev)
+.\scripts\import-sepomex.ps1 -FilePath "..\CPdescargatxt\CPdescarga.txt"
+
+# Despliegue (Neon PostgreSQL usando psql)
+.\scripts\import-sepomex.ps1 -FilePath "..\CPdescargatxt\CPdescarga.txt" -PsqlConnectionString "<cadena-psql-neon>"
+```
 
 Cuando se incorpore una integración, sus opciones deben estar tipadas, registradas en DI y validadas al iniciar. No se deben escribir valores sensibles en logs, errores ni archivos versionados.

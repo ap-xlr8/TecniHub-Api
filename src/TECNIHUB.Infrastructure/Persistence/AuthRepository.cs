@@ -124,6 +124,72 @@ public sealed class AuthRepository : IAuthRepository
                 && u.ScheduledPurgeAt.Value <= utcNow)
             .ToListAsync(cancellationToken);
 
+    public Task<bool> IsUserActiveAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == userId && u.Status == AccountStatus.Active, cancellationToken);
+
+    public async Task DeactivateActiveListingsForUserAsync(
+        Guid userId,
+        DateTimeOffset utcNow,
+        CancellationToken cancellationToken = default)
+    {
+        var openRepairs = await _dbContext.RepairRequests
+            .Where(r => r.ClientUserId == userId && r.Status == RepairRequestStatus.Open && r.DeletedAt == null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var repair in openRepairs)
+        {
+            repair.Cancel(utcNow);
+        }
+
+        var activeSpareParts = await _dbContext.SpareParts
+            .Where(p => p.TechnicianUserId == userId && p.IsAvailable && p.DeletedAt == null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var part in activeSpareParts)
+        {
+            part.SetAvailability(false, utcNow);
+        }
+    }
+
+    public async Task AnonymizeUserOperationalPiiAsync(
+        Guid userId,
+        DateTimeOffset utcNow,
+        CancellationToken cancellationToken = default)
+    {
+        var repairs = await _dbContext.RepairRequests
+            .Where(r => r.ClientUserId == userId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var repair in repairs)
+        {
+            if (repair.Status == RepairRequestStatus.Open)
+            {
+                repair.Cancel(utcNow);
+            }
+
+            repair.Street = "Domicilio anonimizado";
+            repair.ExteriorNumber = null;
+            repair.InteriorNumber = null;
+            repair.AddressReference = null;
+            repair.UpdatedAt = utcNow;
+        }
+
+        var parts = await _dbContext.SpareParts
+            .Where(p => p.TechnicianUserId == userId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var part in parts)
+        {
+            part.IsAvailable = false;
+            part.ContactPhone = null;
+            part.ContactEmail = null;
+            part.ContactNotes = null;
+            part.UpdatedAt = utcNow;
+        }
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         _dbContext.SaveChangesAsync(cancellationToken);
 }

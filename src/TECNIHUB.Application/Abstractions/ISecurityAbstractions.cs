@@ -63,5 +63,8 @@ public interface IAuthRepository
     Task RevokeAllUserRefreshTokensAsync(Guid userId, DateTimeOffset utcNow, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<User>> GetUsersPendingPurgeAsync(DateTimeOffset utcNow, CancellationToken cancellationToken = default);
+    Task<bool> IsUserActiveAsync(Guid userId, CancellationToken cancellationToken = default) => Task.FromResult(true);
+    Task DeactivateActiveListingsForUserAsync(Guid userId, DateTimeOffset utcNow, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task AnonymizeUserOperationalPiiAsync(Guid userId, DateTimeOffset utcNow, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

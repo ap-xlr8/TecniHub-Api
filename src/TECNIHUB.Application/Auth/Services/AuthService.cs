@@ -945,6 +945,7 @@ public sealed class AuthService : IAuthService
         var utcNow = _clock.UtcNow;
         user.RequestGradualDeletion(utcNow, AccountDeletionRetentionWindow);
         await _repository.RevokeAllUserRefreshTokensAsync(user.Id, utcNow, cancellationToken);
+        await _repository.DeactivateActiveListingsForUserAsync(user.Id, utcNow, cancellationToken);
         await _repository.SaveChangesAsync(cancellationToken);
 
         await _auditLogger.LogAsync(
@@ -992,6 +993,7 @@ public sealed class AuthService : IAuthService
         {
             user.AnonymizePersonalData(utcNow);
             await _repository.RevokeAllUserRefreshTokensAsync(user.Id, utcNow, cancellationToken);
+            await _repository.AnonymizeUserOperationalPiiAsync(user.Id, utcNow, cancellationToken);
             await _auditLogger.LogAsync(
                 action: "AccountAnonymized",
                 entityName: "User",

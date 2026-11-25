@@ -4,8 +4,15 @@ using Microsoft.Extensions.DependencyInjection;
 using TECNIHUB.Application.Abstractions;
 using TECNIHUB.Application.Auth.DTOs;
 using TECNIHUB.Application.Auth.Services;
+using TECNIHUB.Application.Chat;
+using TECNIHUB.Application.PostalCodes;
+using TECNIHUB.Application.Profile;
+using TECNIHUB.Application.Repairs;
+using TECNIHUB.Application.SpareParts;
 using TECNIHUB.Infrastructure.Audit;
+using TECNIHUB.Infrastructure.Background;
 using TECNIHUB.Infrastructure.Email;
+using TECNIHUB.Infrastructure.Media;
 using TECNIHUB.Infrastructure.Persistence;
 using TECNIHUB.Infrastructure.Security;
 using TECNIHUB.Infrastructure.Time;
@@ -62,6 +69,16 @@ public static class DependencyInjection
             options.FromEmail = smtpSection["FromEmail"] ?? string.Empty;
         });
 
+        services.Configure<ImgBBOptions>(options =>
+        {
+            var imgSection = configuration.GetSection(ImgBBOptions.SectionName);
+            options.ApiKey = imgSection["ApiKey"] ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(imgSection["EndpointUrl"]))
+            {
+                options.EndpointUrl = imgSection["EndpointUrl"]!;
+            }
+        });
+
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         services.AddDbContext<TecniHubDbContext>(options =>
         {
@@ -89,9 +106,26 @@ public static class DependencyInjection
             services.AddScoped<IEmailSender, UnconfiguredEmailSender>();
         }
 
+        services.AddHttpClient<IImageStorageService, ImgBBImageStorageService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+
         services.AddScoped<IAuditLogger, AuditLoggerService>();
         services.AddScoped<IAuthRepository, AuthRepository>();
+        services.AddScoped<IPostalCodeRepository, PostalCodeRepository>();
+        services.AddScoped<IRepairRequestRepository, RepairRequestRepository>();
+        services.AddScoped<ISparePartRepository, SparePartRepository>();
+        services.AddScoped<IChatRepository, ChatRepository>();
+
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IProfileService, ProfileService>();
+        services.AddScoped<IPostalCodeService, PostalCodeService>();
+        services.AddScoped<IRepairRequestService, RepairRequestService>();
+        services.AddScoped<ISparePartService, SparePartService>();
+        services.AddScoped<IChatService, ChatService>();
+
+        services.AddHostedService<AccountPurgeHostedService>();
 
         return services;
     }

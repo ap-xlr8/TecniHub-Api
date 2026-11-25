@@ -89,6 +89,161 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_logs", (string)null);
                 });
 
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.ChatConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ContextType")
+                        .HasColumnType("integer")
+                        .HasColumnName("context_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("LastMessageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_message_at");
+
+                    b.Property<Guid>("ParticipantAUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("participant_a_user_id");
+
+                    b.Property<Guid>("ParticipantBUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("participant_b_user_id");
+
+                    b.Property<Guid?>("RepairRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_request_id");
+
+                    b.Property<Guid?>("SparePartId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("spare_part_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepairRequestId")
+                        .IsUnique()
+                        .HasFilter("repair_request_id IS NOT NULL");
+
+                    b.HasIndex("ParticipantAUserId", "LastMessageAt");
+
+                    b.HasIndex("ParticipantBUserId", "LastMessageAt");
+
+                    b.HasIndex("SparePartId", "ParticipantBUserId")
+                        .IsUnique()
+                        .HasFilter("spare_part_id IS NOT NULL");
+
+                    b.ToTable("chat_conversations", (string)null);
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("body");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<Guid>("SenderUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sender_user_id");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.HasIndex("ConversationId", "SentAt");
+
+                    b.HasIndex("ConversationId", "SenderUserId", "ReadAt");
+
+                    b.ToTable("chat_messages", (string)null);
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.PostalCodeEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("City")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("city");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Municipality")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("municipality");
+
+                    b.Property<string>("Neighborhood")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("neighborhood");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)")
+                        .HasColumnName("postal_code");
+
+                    b.Property<string>("SettlementType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("settlement_type");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("state");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PostalCode");
+
+                    b.ToTable("postal_codes", (string)null);
+                });
+
             modelBuilder.Entity("TECNIHUB.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -146,6 +301,190 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.RepairRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AddressReference")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)")
+                        .HasColumnName("address_reference");
+
+                    b.Property<string>("ApplianceName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("appliance_name");
+
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<Guid?>("AssignedTechnicianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_technician_id");
+
+                    b.Property<string>("BrandModel")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("brand_model");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("city");
+
+                    b.Property<Guid>("ClientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_user_id");
+
+                    b.Property<string>("ClosureNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("closure_notes");
+
+                    b.Property<DateTimeOffset?>("ClosureRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closure_requested_at");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("ExteriorNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("exterior_number");
+
+                    b.Property<string>("InteriorNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("interior_number");
+
+                    b.Property<string>("IssueDescription")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("issue_description");
+
+                    b.Property<string>("Municipality")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("municipality");
+
+                    b.Property<string>("Neighborhood")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("neighborhood");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)")
+                        .HasColumnName("postal_code");
+
+                    b.Property<DateOnly>("PreferredDate")
+                        .HasColumnType("date")
+                        .HasColumnName("preferred_date");
+
+                    b.Property<string>("PreferredTimeSlot")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("preferred_time_slot");
+
+                    b.Property<DateTimeOffset?>("ScheduledStartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("scheduled_start_at");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("state");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Street")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("street");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedTechnicianId", "ScheduledStartAt");
+
+                    b.HasIndex("ClientUserId", "CreatedAt");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("repair_requests", (string)null);
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.RepairRequestImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("display_order");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("image_url");
+
+                    b.Property<Guid>("RepairRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_request_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepairRequestId", "DisplayOrder");
+
+                    b.ToTable("repair_request_images", (string)null);
+                });
+
             modelBuilder.Entity("TECNIHUB.Domain.Entities.Role", b =>
                 {
                     b.Property<int>("Id")
@@ -196,6 +535,129 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                             Name = "Técnico",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.SparePart", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApplianceCategory")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("appliance_category");
+
+                    b.Property<string>("Compatibility")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("compatibility");
+
+                    b.Property<int>("Condition")
+                        .HasColumnType("integer")
+                        .HasColumnName("condition");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("contact_email");
+
+                    b.Property<string>("ContactNotes")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("contact_notes");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("contact_phone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsAvailable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_available");
+
+                    b.Property<int>("Modality")
+                        .HasColumnType("integer")
+                        .HasColumnName("modality");
+
+                    b.Property<decimal>("PriceMxn")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price_mxn");
+
+                    b.Property<Guid>("TechnicianUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_user_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsAvailable", "CreatedAt");
+
+                    b.HasIndex("TechnicianUserId", "CreatedAt");
+
+                    b.ToTable("spare_parts", (string)null);
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.SparePartImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("display_order");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("image_url");
+
+                    b.Property<Guid>("SparePartId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("spare_part_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SparePartId", "DisplayOrder");
+
+                    b.ToTable("spare_part_images", (string)null);
                 });
 
             modelBuilder.Entity("TECNIHUB.Domain.Entities.TechnicianProfile", b =>
@@ -372,6 +834,58 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.ToTable("verification_codes", (string)null);
                 });
 
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.ChatConversation", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "ParticipantAUser")
+                        .WithMany()
+                        .HasForeignKey("ParticipantAUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "ParticipantBUser")
+                        .WithMany()
+                        .HasForeignKey("ParticipantBUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TECNIHUB.Domain.Entities.RepairRequest", "RepairRequest")
+                        .WithMany()
+                        .HasForeignKey("RepairRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TECNIHUB.Domain.Entities.SparePart", "SparePart")
+                        .WithMany()
+                        .HasForeignKey("SparePartId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParticipantAUser");
+
+                    b.Navigation("ParticipantBUser");
+
+                    b.Navigation("RepairRequest");
+
+                    b.Navigation("SparePart");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.ChatMessage", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.ChatConversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "SenderUser")
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("SenderUser");
+                });
+
             modelBuilder.Entity("TECNIHUB.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("TECNIHUB.Domain.Entities.User", "User")
@@ -381,6 +895,57 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.RepairRequest", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "AssignedTechnician")
+                        .WithMany()
+                        .HasForeignKey("AssignedTechnicianId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "ClientUser")
+                        .WithMany()
+                        .HasForeignKey("ClientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedTechnician");
+
+                    b.Navigation("ClientUser");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.RepairRequestImage", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.RepairRequest", "RepairRequest")
+                        .WithMany("Images")
+                        .HasForeignKey("RepairRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RepairRequest");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.SparePart", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "TechnicianUser")
+                        .WithMany()
+                        .HasForeignKey("TechnicianUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TechnicianUser");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.SparePartImage", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.SparePart", "SparePart")
+                        .WithMany("Images")
+                        .HasForeignKey("SparePartId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SparePart");
                 });
 
             modelBuilder.Entity("TECNIHUB.Domain.Entities.TechnicianProfile", b =>
@@ -414,6 +979,21 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.ChatConversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.RepairRequest", b =>
+                {
+                    b.Navigation("Images");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.SparePart", b =>
+                {
+                    b.Navigation("Images");
                 });
 
             modelBuilder.Entity("TECNIHUB.Domain.Entities.User", b =>

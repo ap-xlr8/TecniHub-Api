@@ -26,3 +26,34 @@ public enum AuditOutcome
     Failure = 2,
     Blocked = 3
 }
+
+public enum RepairRequestStatus
+{
+    Open = 1,
+    Assigned = 2,
+    Scheduled = 3,
+    InProgress = 4,
+    ClosureRequested = 5,
+    Completed = 6,
+    Cancelled = 7
+}
+
+public enum SparePartCondition
+{
+    New = 1,
+    Used = 2,
+    Refurbished = 3
+}
+
+public enum SparePartModality
+{
+    Sale = 1,
+    Exchange = 2,
+    SaleOrExchange = 3
+}
+
+public enum ConversationContextType
+{
+    RepairRequest = 1,
+    SparePart = 2
+}
