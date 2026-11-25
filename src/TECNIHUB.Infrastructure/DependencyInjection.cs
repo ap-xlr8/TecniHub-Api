@@ -8,6 +8,7 @@ using TECNIHUB.Application.Chat;
 using TECNIHUB.Application.PostalCodes;
 using TECNIHUB.Application.Profile;
 using TECNIHUB.Application.Repairs;
+using TECNIHUB.Application.Reviews;
 using TECNIHUB.Application.SpareParts;
 using TECNIHUB.Infrastructure.Audit;
 using TECNIHUB.Infrastructure.Background;
@@ -117,6 +118,7 @@ public static class DependencyInjection
         services.AddScoped<IRepairRequestRepository, RepairRequestRepository>();
         services.AddScoped<ISparePartRepository, SparePartRepository>();
         services.AddScoped<IChatRepository, ChatRepository>();
+        services.AddScoped<IServiceReviewRepository, ServiceReviewRepository>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProfileService, ProfileService>();
@@ -124,6 +126,7 @@ public static class DependencyInjection
         services.AddScoped<IRepairRequestService, RepairRequestService>();
         services.AddScoped<ISparePartService, SparePartService>();
         services.AddScoped<IChatService, ChatService>();
+        services.AddScoped<IPublicProfileService, PublicProfileService>();
 
         services.AddHostedService<AccountPurgeHostedService>();
 

@@ -44,7 +44,8 @@ public sealed record UserSummaryDto(
     string? Phone,
     string Role,
     bool IsEmailVerified,
-    TechnicianProfileDto? TechnicianProfile);
+    TechnicianProfileDto? TechnicianProfile,
+    string? PublicRegion = null);
 
 public sealed record AuthSessionResult(
     string AccessToken,

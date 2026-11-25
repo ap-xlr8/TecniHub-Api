@@ -166,6 +166,7 @@ app.MapMediaEndpoints();
 app.MapRepairRequestEndpoints();
 app.MapSparePartEndpoints();
 app.MapChatEndpoints();
+app.MapPublicProfileEndpoints();
 
 app.Run();
 

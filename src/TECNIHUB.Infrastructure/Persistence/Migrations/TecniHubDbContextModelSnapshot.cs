@@ -537,6 +537,54 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.ServiceReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ClientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_user_id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer")
+                        .HasColumnName("rating");
+
+                    b.Property<Guid>("RepairRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_request_id");
+
+                    b.Property<Guid>("TechnicianUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_user_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientUserId");
+
+                    b.HasIndex("RepairRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("TechnicianUserId", "CreatedAt");
+
+                    b.ToTable("service_reviews", (string)null);
+                });
+
             modelBuilder.Entity("TECNIHUB.Domain.Entities.SparePart", b =>
                 {
                     b.Property<Guid>("Id")
@@ -754,6 +802,11 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("phone");
 
+                    b.Property<string>("PublicRegion")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("public_region");
+
                     b.Property<int>("RoleId")
                         .HasColumnType("integer")
                         .HasColumnName("role_id");
@@ -924,6 +977,33 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("RepairRequest");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.ServiceReview", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "ClientUser")
+                        .WithMany()
+                        .HasForeignKey("ClientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TECNIHUB.Domain.Entities.RepairRequest", "RepairRequest")
+                        .WithMany()
+                        .HasForeignKey("RepairRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "TechnicianUser")
+                        .WithMany()
+                        .HasForeignKey("TechnicianUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ClientUser");
+
+                    b.Navigation("RepairRequest");
+
+                    b.Navigation("TechnicianUser");
                 });
 
             modelBuilder.Entity("TECNIHUB.Domain.Entities.SparePart", b =>

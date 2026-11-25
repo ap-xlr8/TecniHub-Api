@@ -10,7 +10,8 @@ public sealed record UpdateOwnProfileRequest(
     string? Specialties = null,
     int? ExperienceYears = null,
     string? ServiceZone = null,
-    string? BusinessName = null);
+    string? BusinessName = null,
+    string? PublicRegion = null);
 
 public interface IProfileService
 {

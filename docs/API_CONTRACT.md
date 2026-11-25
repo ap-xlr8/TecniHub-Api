@@ -59,3 +59,7 @@ La API expone los endpoints de autenticación, perfiles, catálogo postal SEPOME
 | `POST` | `/api/chat/conversations/spare-part/{sparePartId}` | `TechnicianOnly` | Abre/obtiene chat vinculado a una refacción disponible (`200`, `400`, `404`, `409`) |
 | `GET` | `/api/chat/conversations/{id}/messages` | JWT (participante) | Historial y polling incremental (`?after=<utc>`), marca recibidos como leídos (`200`, `403`, `404`) |
 | `POST` | `/api/chat/conversations/{id}/messages` | JWT (participante, `ChatRateLimit`) | Envía mensaje de texto plano (1–1000 chars) (`201`, `400`, `403`, `409`, `429`) |
+| `GET` | `/api/profiles/technicians/{technicianId}` | JWT | Perfil público del técnico y reseñas verificadas (`200`, `404`) |
+| `GET` | `/api/profiles/clients/{clientId}` | `TechnicianOnly` (con asignación confirmada) | Perfil público limitado del cliente sin PII privada ni calificación (`200`, `403`, `404`) |
+| `GET` | `/api/repairs/{id}/review` | JWT (dueño o técnico asignado) | Consulta reseña opcional asociada a una reparación (`200`, `204`, `403`, `404`) |
+| `POST` | `/api/repairs/{id}/review` | `ClientOnly` (dueño, `Completed`) | Registra reseña opcional única (`1..5`) para un servicio completado (`201`, `400`, `403`, `409`) |

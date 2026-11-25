@@ -1122,5 +1122,6 @@ public sealed class AuthService : IAuthService
                 user.TechnicianProfile.Specialties,
                 user.TechnicianProfile.ExperienceYears,
                 user.TechnicianProfile.ServiceZone,
-                user.TechnicianProfile.BusinessName));
+                user.TechnicianProfile.BusinessName),
+        user.PublicRegion);
 }

@@ -23,6 +23,7 @@ public sealed class TecniHubDbContext : DbContext
     public DbSet<SparePartImage> SparePartImages => Set<SparePartImage>();
     public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +58,7 @@ public sealed class TecniHubDbContext : DbContext
             entity.Property(u => u.Email).HasColumnName("email").HasMaxLength(254).IsRequired();
             entity.Property(u => u.NormalizedEmail).HasColumnName("normalized_email").HasMaxLength(254).IsRequired();
             entity.Property(u => u.Phone).HasColumnName("phone").HasMaxLength(20);
+            entity.Property(u => u.PublicRegion).HasColumnName("public_region").HasMaxLength(120);
             entity.Property(u => u.PasswordHash).HasColumnName("password_hash").HasMaxLength(512).IsRequired();
             entity.Property(u => u.IsEmailVerified).HasColumnName("is_email_verified").IsRequired();
             entity.Property(u => u.Status).HasColumnName("status").HasConversion<int>().IsRequired();
@@ -361,6 +363,38 @@ public sealed class TecniHubDbContext : DbContext
             entity.HasOne(m => m.SenderUser)
                 .WithMany()
                 .HasForeignKey(m => m.SenderUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ServiceReview>(entity =>
+        {
+            entity.ToTable("service_reviews");
+            entity.HasKey(r => r.Id);
+            entity.Property(r => r.Id).HasColumnName("id");
+            entity.Property(r => r.RepairRequestId).HasColumnName("repair_request_id").IsRequired();
+            entity.Property(r => r.TechnicianUserId).HasColumnName("technician_user_id").IsRequired();
+            entity.Property(r => r.ClientUserId).HasColumnName("client_user_id").IsRequired();
+            entity.Property(r => r.Rating).HasColumnName("rating").IsRequired();
+            entity.Property(r => r.Comment).HasColumnName("comment").HasMaxLength(ServiceReview.MaxCommentLength);
+            entity.Property(r => r.CreatedAt).HasColumnName("created_at").IsRequired();
+            entity.Property(r => r.UpdatedAt).HasColumnName("updated_at").IsRequired();
+
+            entity.HasIndex(r => r.RepairRequestId).IsUnique();
+            entity.HasIndex(r => new { r.TechnicianUserId, r.CreatedAt });
+
+            entity.HasOne(r => r.RepairRequest)
+                .WithMany()
+                .HasForeignKey(r => r.RepairRequestId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.TechnicianUser)
+                .WithMany()
+                .HasForeignKey(r => r.TechnicianUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.ClientUser)
+                .WithMany()
+                .HasForeignKey(r => r.ClientUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

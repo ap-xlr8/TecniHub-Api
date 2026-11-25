@@ -13,6 +13,7 @@ public sealed class User
     public string Email { get; set; } = string.Empty;
     public string NormalizedEmail { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    public string? PublicRegion { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
 
     public bool IsEmailVerified { get; set; }
@@ -46,11 +47,17 @@ public sealed class User
         UpdatedAt = utcNow;
     }
 
-    public void UpdateBasicProfile(string firstName, string lastName, string? phone, DateTimeOffset utcNow)
+    public void UpdateBasicProfile(
+        string firstName,
+        string lastName,
+        string? phone,
+        DateTimeOffset utcNow,
+        string? publicRegion = null)
     {
         FirstName = firstName;
         LastName = lastName;
         Phone = phone;
+        PublicRegion = publicRegion;
         UpdatedAt = utcNow;
     }
 
@@ -70,6 +77,7 @@ public sealed class User
         Email = anonymizedToken;
         NormalizedEmail = anonymizedToken.ToUpperInvariant();
         Phone = null;
+        PublicRegion = null;
         PasswordHash = string.Empty;
         Status = AccountStatus.Anonymized;
         UpdatedAt = utcNow;

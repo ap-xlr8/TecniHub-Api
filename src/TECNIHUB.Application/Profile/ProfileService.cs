@@ -57,6 +57,7 @@ public sealed class ProfileService : IProfileService
         var firstName = request.FirstName?.Trim() ?? string.Empty;
         var lastName = request.LastName?.Trim() ?? string.Empty;
         var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var publicRegion = string.IsNullOrWhiteSpace(request.PublicRegion) ? null : request.PublicRegion.Trim();
 
         if (string.IsNullOrWhiteSpace(firstName) || firstName.Length > 80)
         {
@@ -71,6 +72,11 @@ public sealed class ProfileService : IProfileService
         if (phone is not null && !IsValidPhone(phone))
         {
             errors.Add("El teléfono debe contener entre 7 y 20 caracteres numéricos o de formato telefónico válido.");
+        }
+
+        if (publicRegion is not null && publicRegion.Length > 120)
+        {
+            errors.Add("La zona general pública no debe superar 120 caracteres.");
         }
 
         var isTechnician = user.GetUserRole() == UserRole.Technician;
@@ -120,7 +126,7 @@ public sealed class ProfileService : IProfileService
         }
 
         var utcNow = _clock.UtcNow;
-        user.UpdateBasicProfile(firstName, lastName, phone, utcNow);
+        user.UpdateBasicProfile(firstName, lastName, phone, utcNow, publicRegion);
 
         if (isTechnician)
         {
@@ -197,5 +203,6 @@ public sealed class ProfileService : IProfileService
                 user.TechnicianProfile.Specialties,
                 user.TechnicianProfile.ExperienceYears,
                 user.TechnicianProfile.ServiceZone,
-                user.TechnicianProfile.BusinessName));
+                user.TechnicianProfile.BusinessName),
+        user.PublicRegion);
 }
