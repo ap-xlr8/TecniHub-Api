@@ -11,7 +11,7 @@ using TECNIHUB.Domain.Rules;
 
 namespace TECNIHUB.UnitTests;
 
-public sealed class Sprint2OperationsTests
+public sealed class CoreOperationsServiceTests
 {
     private readonly FakeClock _clock = new(new DateTimeOffset(2026, 11, 25, 16, 0, 0, TimeSpan.Zero));
     private readonly RecordingAuditLogger _audit = new();
@@ -175,7 +175,7 @@ public sealed class Sprint2OperationsTests
         Assert.False(unauthorizedSchedule.IsSuccess);
         Assert.Equal(ErrorType.Forbidden, unauthorizedSchedule.Error!.Type);
 
-        // Two-step closure (HU-014)
+        // Two-step closure
         var start = await sut.StartWorkAsync(repairId, techAId, _meta);
         Assert.True(start.IsSuccess);
         Assert.Equal("InProgress", start.Value!.Status);

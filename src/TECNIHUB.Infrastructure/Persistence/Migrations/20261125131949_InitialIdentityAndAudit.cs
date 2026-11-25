@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace TECNIHUB.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialSprint1 : Migration
+    public partial class InitialIdentityAndAudit : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

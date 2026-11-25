@@ -20,13 +20,13 @@ using TECNIHUB.Infrastructure.Persistence;
 
 namespace TECNIHUB.IntegrationTests;
 
-public sealed class Sprint2FlowIntegrationTests : IDisposable
+public sealed class OperationsFlowIntegrationTests : IDisposable
 {
     private readonly string _databaseName = $"tecnihub-s2-{Guid.NewGuid():N}";
     private readonly CapturingEmailSender _emailSender = new();
     private readonly WebApplicationFactory<Program> _factory;
 
-    public Sprint2FlowIntegrationTests()
+    public OperationsFlowIntegrationTests()
     {
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -76,7 +76,7 @@ public sealed class Sprint2FlowIntegrationTests : IDisposable
     public void Dispose() => _factory.Dispose();
 
     [Fact]
-    public async Task Full_sprint2_lifecycle_repairs_privacy_itinerary_chat_closure_and_spare_parts()
+    public async Task Full_operations_lifecycle_repairs_privacy_itinerary_chat_closure_and_spare_parts()
     {
         using var clientHttp = _factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var tech1Http = _factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
@@ -90,7 +90,7 @@ public sealed class Sprint2FlowIntegrationTests : IDisposable
         tech1Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tech1Session.AccessToken);
         tech2Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tech2Session.AccessToken);
 
-        // HU-005 & HU-006 Profile
+        // Profile
         var profileGet = await clientHttp.GetFromJsonAsync<UserSummaryDto>("/api/profile/me");
         Assert.NotNull(profileGet);
         var profileUpdate = await clientHttp.PutAsJsonAsync("/api/profile/me", new UpdateOwnProfileRequest("Elena", "Morales", "7731002000"));
@@ -102,7 +102,7 @@ public sealed class Sprint2FlowIntegrationTests : IDisposable
         Assert.True(cpLookup!.Found);
         Assert.Contains("Centro", cpLookup.Neighborhoods);
 
-        // HU-007 Client publishes repair request
+        // Client publishes repair request
         var createRepair = await clientHttp.PostAsJsonAsync("/api/repairs", new CreateRepairRequestInput(
             "Lavadora", "LG TurboDrum", "No centrifuga y marca error OE al drenar agua.",
             DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), "Tarde (14:00 - 18:00)",
@@ -113,7 +113,7 @@ public sealed class Sprint2FlowIntegrationTests : IDisposable
         Assert.NotNull(createdRepair);
         Assert.NotNull(createdRepair!.FullAddress);
 
-        // HU-009 Technician board MUST NOT contain street or exteriorNumber
+        // Technician board MUST NOT contain street or exteriorNumber
         var boardRaw = await tech1Http.GetStringAsync("/api/repairs/board");
         Assert.DoesNotContain("Calle Zarco", boardRaw);
         Assert.Contains("Centro", boardRaw);
@@ -137,7 +137,7 @@ public sealed class Sprint2FlowIntegrationTests : IDisposable
         var tech2Detail = await tech2Http.GetAsync($"/api/repairs/{createdRepair.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, tech2Detail.StatusCode);
 
-        // HU-011 Chat between client and assigned tech; tech2 is blocked (403)
+        // Chat between client and assigned tech; tech2 is blocked (403)
         var convId = acceptedRepair.ConversationId!.Value;
         var msg1 = await clientHttp.PostAsJsonAsync($"/api/chat/conversations/{convId}/messages", new SendChatMessageInput("Hola, te espero a las 4 PM."));
         Assert.Equal(HttpStatusCode.Created, msg1.StatusCode);
@@ -148,7 +148,7 @@ public sealed class Sprint2FlowIntegrationTests : IDisposable
         var tech1Thread = await tech1Http.GetFromJsonAsync<ChatThreadDto>($"/api/chat/conversations/{convId}/messages");
         Assert.Single(tech1Thread!.Messages);
 
-        // HU-010 Schedule + HU-014 Two-step closure
+        // Schedule + Two-step closure
         var scheduleResp = await tech1Http.PutAsJsonAsync($"/api/repairs/{createdRepair.Id}/schedule", new ScheduleRepairInput(DateTimeOffset.UtcNow.AddHours(4)));
         Assert.Equal(HttpStatusCode.OK, scheduleResp.StatusCode);
 
@@ -167,7 +167,7 @@ public sealed class Sprint2FlowIntegrationTests : IDisposable
         var msgAfterClose = await tech1Http.PostAsJsonAsync($"/api/chat/conversations/{convId}/messages", new SendChatMessageInput("Listo"));
         Assert.Equal(HttpStatusCode.Conflict, msgAfterClose.StatusCode);
 
-        // HU-008 Spare parts
+        // Spare parts
         var partCreate = await tech1Http.PostAsJsonAsync("/api/spare-parts", new UpsertSparePartInput(
             "Termostato universal", "Termostato para refrigerador doméstico dos puertas.", "Refrigeración",
             "Mabe / General Electric", "New", "Sale", 320m, "7735556677", null, null, null));

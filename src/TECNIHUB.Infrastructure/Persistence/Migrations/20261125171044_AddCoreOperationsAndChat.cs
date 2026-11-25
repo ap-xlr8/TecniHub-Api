@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace TECNIHUB.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class Sprint2CoreOperations : Migration
+    public partial class AddCoreOperationsAndChat : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

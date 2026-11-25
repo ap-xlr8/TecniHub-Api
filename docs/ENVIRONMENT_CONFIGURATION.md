@@ -22,7 +22,7 @@ No ejecutes estos ejemplos con marcadores textuales como si fueran credenciales 
 | `ConnectionStrings:DefaultConnection` | Privada | PostgreSQL local / Neon en despliegue |
 | `Jwt:SigningKey` | Secreto | Firma HMAC-SHA256 de tokens JWT y códigos de verificación |
 | `Smtp:Username` / `Smtp:Password` | Secreto | Envío de códigos de verificación y recuperación vía SMTP (Gmail App Password) |
-| `ImgBB:ApiKey` | Secreto | Activo en Sprint 2: carga segura de imágenes desde backend (User Secrets local / variable protegida en despliegue) |
+| `ImgBB:ApiKey` | Secreto | Carga segura de imágenes desde backend (User Secrets local / variable protegida en despliegue) |
 | `PushNotifications:Vapid:Subject` | Pública | No utilizada |
 | `PushNotifications:Vapid:PublicKey` | Pública | No utilizada |
 | `PushNotifications:Vapid:PrivateKey` | Secreto | Solo User Secrets local / almacén seguro de producción; no se crea ni consume todavía |
