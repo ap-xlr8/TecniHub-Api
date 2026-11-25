@@ -8,18 +8,21 @@ El proyecto API incluye `UserSecretsId`. Para añadir un secreto local solo cuan
 
 ```powershell
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<cadena-de-desarrollo-local>" --project src/TECNIHUB.API
-dotnet user-secrets set "PushNotifications:Vapid:PrivateKey" "<clave-generada-localmente>" --project src/TECNIHUB.API
-dotnet user-secrets set "SendGrid:ApiKey" "<api-key-de-sendgrid>" --project src/TECNIHUB.API
+dotnet user-secrets set "Jwt:SigningKey" "<clave-secreta-minimo-32-bytes>" --project src/TECNIHUB.API
+dotnet user-secrets set "Smtp:Username" "<correo-remitente-smtp>" --project src/TECNIHUB.API
+dotnet user-secrets set "Smtp:Password" "<app-password-smtp>" --project src/TECNIHUB.API
 dotnet user-secrets set "ImgBB:ApiKey" "<api-key-de-imgbb>" --project src/TECNIHUB.API
+dotnet user-secrets set "PushNotifications:Vapid:PrivateKey" "<clave-generada-localmente>" --project src/TECNIHUB.API
 ```
 
-No ejecutes estos ejemplos con marcadores textuales como si fueran credenciales válidas. User Secrets es para desarrollo; no es un almacén cifrado de producción. En despliegue se inyectarán como variables protegidas del entorno: `ConnectionStrings__DefaultConnection`, `SendGrid__ApiKey` e `ImgBB__ApiKey`. Si el backend se publica en Azure App Service, se configuran en Application Settings/Connection Strings; los secretos nunca se colocan en el frontend. No se han agregado credenciales ni se ha conectado Neon.
+No ejecutes estos ejemplos con marcadores textuales como si fueran credenciales válidas. User Secrets es para desarrollo; no es un almacén cifrado de producción. En despliegue se inyectarán como variables protegidas del entorno: `ConnectionStrings__DefaultConnection`, `Jwt__SigningKey`, `Smtp__Username`, `Smtp__Password` e `ImgBB__ApiKey`. Si el backend se publica en Azure App Service, se configuran en Application Settings/Connection Strings; los secretos nunca se colocan en el frontend.
 
 | Clave | Tipo | Uso actual |
 |---|---|---|
-| `ConnectionStrings:DefaultConnection` | Privada | PostgreSQL local / Neon previsto; no consumida hasta implementar persistencia |
-| `SendGrid:ApiKey` | Secreto | Pendiente de integración; User Secrets local / variable protegida en despliegue |
-| `ImgBB:ApiKey` | Secreto | Pendiente de integración; User Secrets local / variable protegida en despliegue |
+| `ConnectionStrings:DefaultConnection` | Privada | PostgreSQL local / Neon en despliegue |
+| `Jwt:SigningKey` | Secreto | Firma HMAC-SHA256 de tokens JWT y códigos de verificación |
+| `Smtp:Username` / `Smtp:Password` | Secreto | Envío de códigos de verificación y recuperación vía SMTP (Gmail App Password) |
+| `ImgBB:ApiKey` | Secreto | Pendiente de integración en Sprint 2; User Secrets local / variable protegida en despliegue |
 | `PushNotifications:Vapid:Subject` | Pública | No utilizada |
 | `PushNotifications:Vapid:PublicKey` | Pública | No utilizada |
 | `PushNotifications:Vapid:PrivateKey` | Secreto | Solo User Secrets local / almacén seguro de producción; no se crea ni consume todavía |

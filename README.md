@@ -28,7 +28,9 @@ El proyecto API ya tiene un `UserSecretsId`. La base elegida es PostgreSQL local
 
 ```powershell
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<cadena-postgresql-local-o-neon>" --project src/TECNIHUB.API
-dotnet user-secrets set "SendGrid:ApiKey" "<api-key-de-sendgrid>" --project src/TECNIHUB.API
+dotnet user-secrets set "Jwt:SigningKey" "<clave-secreta-minimo-32-bytes>" --project src/TECNIHUB.API
+dotnet user-secrets set "Smtp:Username" "<correo-remitente-smtp>" --project src/TECNIHUB.API
+dotnet user-secrets set "Smtp:Password" "<app-password-smtp>" --project src/TECNIHUB.API
 dotnet user-secrets set "ImgBB:ApiKey" "<api-key-de-imgbb>" --project src/TECNIHUB.API
 ```
 
