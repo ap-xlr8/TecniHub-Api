@@ -19,10 +19,7 @@ public sealed class DevEmailSender : IEmailSender
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "[DEV-EMAIL] Verificación de correo para {Email} ({RecipientName}): código {Code} (vence en 10 min).",
-            toEmail,
-            recipientName,
-            code);
+            "[DEV-EMAIL] Envío de código de verificación simulado en desarrollo (vigencia: 10 min; configure Smtp para entrega real).");
 
         return Task.FromResult(true);
     }
@@ -34,10 +31,7 @@ public sealed class DevEmailSender : IEmailSender
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "[DEV-EMAIL] Recuperación de contraseña para {Email} ({RecipientName}): código {Code} (vence en 10 min).",
-            toEmail,
-            recipientName,
-            code);
+            "[DEV-EMAIL] Envío de código de recuperación simulado en desarrollo (vigencia: 10 min; configure Smtp para entrega real).");
 
         return Task.FromResult(true);
     }
