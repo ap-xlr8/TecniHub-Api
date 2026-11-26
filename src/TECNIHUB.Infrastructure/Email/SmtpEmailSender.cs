@@ -109,7 +109,7 @@ public sealed class SmtpEmailSender : IEmailSender
 
         using var client = new SmtpClient(_options.Host, _options.Port)
         {
-            EnableSsl = _options.EnableSsl,
+            EnableSsl = true,
             DeliveryMethod = SmtpDeliveryMethod.Network,
             UseDefaultCredentials = false,
             Credentials = new NetworkCredential(_options.Username, _options.Password),

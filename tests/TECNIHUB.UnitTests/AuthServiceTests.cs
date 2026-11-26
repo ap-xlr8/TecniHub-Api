@@ -156,7 +156,7 @@ public sealed class AuthServiceTests
     {
         var unknown = await _sut.RequestPasswordResetAsync(new RequestPasswordResetRequest("noexiste@example.com"), _metadata);
         Assert.True(unknown.IsSuccess);
-        Assert.Equal(AuthService.GenericPasswordResetMessage, unknown.Value!.Message);
+        Assert.Equal(AuthService.GenericRecoveryNotice, unknown.Value!.Message);
 
         await _sut.RegisterClientAsync(
             new RegisterClientRequest("Diego", "Vega", "diego@example.com", "Clave#2026", null),
@@ -165,7 +165,7 @@ public sealed class AuthServiceTests
 
         var resetRequest = await _sut.RequestPasswordResetAsync(new RequestPasswordResetRequest("diego@example.com"), _metadata);
         Assert.True(resetRequest.IsSuccess);
-        Assert.Equal(AuthService.GenericPasswordResetMessage, resetRequest.Value!.Message);
+        Assert.Equal(AuthService.GenericRecoveryNotice, resetRequest.Value!.Message);
 
         var resetCode = _emailSender.SentPasswordResetCodes[0].Code;
         var confirm = await _sut.ConfirmPasswordResetAsync(

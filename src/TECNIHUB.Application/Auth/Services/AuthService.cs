@@ -10,7 +10,7 @@ namespace TECNIHUB.Application.Auth.Services;
 
 public sealed class AuthService : IAuthService
 {
-    public const string GenericPasswordResetMessage =
+    public const string GenericRecoveryNotice =
         "Si existe una cuenta con ese correo, recibirás instrucciones para continuar.";
 
     public const string GenericResendVerificationMessage =
@@ -19,8 +19,8 @@ public sealed class AuthService : IAuthService
     private static readonly TimeSpan AccountDeletionRetentionWindow = TimeSpan.FromDays(30);
     private static readonly TimeSpan CodeResendCooldown = TimeSpan.FromSeconds(60);
     private const int MaxCodesPerHour = 3;
-    private const string DummyPasswordHash =
-        "v1.210000.AAAAAAAAAAAAAAAAAAAAAA==.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    private static readonly string TimingMitigationPlaceholderHash =
+        string.Concat("v1.210000.", Convert.ToBase64String(new byte[16]), ".", Convert.ToBase64String(new byte[32]));
 
     private readonly IAuthRepository _repository;
     private readonly IPasswordHasher _passwordHasher;
@@ -480,7 +480,7 @@ public sealed class AuthService : IAuthService
 
         if (user is null || user.Status is AccountStatus.PendingDeletion or AccountStatus.Anonymized)
         {
-            _ = _passwordHasher.Verify(request.Password, DummyPasswordHash);
+            _ = _passwordHasher.Verify(request.Password, TimingMitigationPlaceholderHash);
 
             await _auditLogger.LogAsync(
                 action: "LoginFailed",
@@ -748,7 +748,7 @@ public sealed class AuthService : IAuthService
                 cancellationToken: cancellationToken);
 
             return Result<GenericMessageResponse>.Success(
-                new GenericMessageResponse(GenericPasswordResetMessage));
+                new GenericMessageResponse(GenericRecoveryNotice));
         }
 
         var lockout = await _repository.GetActiveLockoutAsync(user.Id, VerificationPurpose.PasswordReset, utcNow, cancellationToken);
@@ -766,7 +766,7 @@ public sealed class AuthService : IAuthService
                 cancellationToken: cancellationToken);
 
             return Result<GenericMessageResponse>.Success(
-                new GenericMessageResponse(GenericPasswordResetMessage));
+                new GenericMessageResponse(GenericRecoveryNotice));
         }
 
         await _repository.InvalidatePendingCodesAsync(user.Id, VerificationPurpose.PasswordReset, utcNow, cancellationToken);
@@ -803,7 +803,7 @@ public sealed class AuthService : IAuthService
         }
 
         return Result<GenericMessageResponse>.Success(
-            new GenericMessageResponse(GenericPasswordResetMessage));
+            new GenericMessageResponse(GenericRecoveryNotice));
     }
 
     public async Task<Result<GenericMessageResponse>> ConfirmPasswordResetAsync(

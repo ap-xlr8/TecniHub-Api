@@ -61,7 +61,7 @@ public sealed class ImgBBImageStorageService : IImageStorageService
                         "La imagen supera el tamaño máximo permitido de 5 MB."));
                 }
 
-                memory.Write(chunk, 0, bytesRead);
+                await memory.WriteAsync(chunk.AsMemory(0, bytesRead), cancellationToken);
             }
 
             buffer = memory.ToArray();

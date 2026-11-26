@@ -151,7 +151,6 @@ public static class AuthEndpoints
         LoginRequest request,
         IAuthService authService,
         HttpContext httpContext,
-        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         var result = await authService.LoginAsync(request, BuildMetadata(httpContext), cancellationToken);
@@ -161,7 +160,7 @@ public static class AuthEndpoints
         }
 
         var session = result.Value!;
-        SetRefreshTokenCookie(httpContext, environment, session.RefreshToken, session.RefreshTokenExpiresAt);
+        SetRefreshTokenCookie(httpContext, session.RefreshToken, session.RefreshTokenExpiresAt);
 
         return Results.Ok(new AuthPublicSessionResponse(
             session.AccessToken,
@@ -172,19 +171,18 @@ public static class AuthEndpoints
     private static async Task<IResult> RefreshAsync(
         IAuthService authService,
         HttpContext httpContext,
-        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         var rawToken = httpContext.Request.Cookies[RefreshTokenCookieName];
         var result = await authService.RefreshSessionAsync(rawToken, BuildMetadata(httpContext), cancellationToken);
         if (!result.IsSuccess)
         {
-            ClearRefreshTokenCookie(httpContext, environment);
+            ClearRefreshTokenCookie(httpContext);
             return ToProblemResult(result.Error!);
         }
 
         var session = result.Value!;
-        SetRefreshTokenCookie(httpContext, environment, session.RefreshToken, session.RefreshTokenExpiresAt);
+        SetRefreshTokenCookie(httpContext, session.RefreshToken, session.RefreshTokenExpiresAt);
 
         return Results.Ok(new AuthPublicSessionResponse(
             session.AccessToken,
@@ -195,7 +193,6 @@ public static class AuthEndpoints
     private static async Task<IResult> LogoutAsync(
         IAuthService authService,
         HttpContext httpContext,
-        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         var rawToken = httpContext.Request.Cookies[RefreshTokenCookieName];
@@ -205,7 +202,7 @@ public static class AuthEndpoints
         var role = httpContext.User.FindFirstValue(ClaimTypes.Role);
 
         var result = await authService.LogoutAsync(rawToken, userId, role, BuildMetadata(httpContext), cancellationToken);
-        ClearRefreshTokenCookie(httpContext, environment);
+        ClearRefreshTokenCookie(httpContext);
 
         return Results.Ok(result.Value);
     }
@@ -248,7 +245,6 @@ public static class AuthEndpoints
         ClaimsPrincipal user,
         IAuthService authService,
         HttpContext httpContext,
-        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
@@ -262,7 +258,7 @@ public static class AuthEndpoints
             return ToProblemResult(result.Error!);
         }
 
-        ClearRefreshTokenCookie(httpContext, environment);
+        ClearRefreshTokenCookie(httpContext);
         return Results.Ok(result.Value);
     }
 
@@ -283,35 +279,31 @@ public static class AuthEndpoints
 
     private static void SetRefreshTokenCookie(
         HttpContext httpContext,
-        IWebHostEnvironment environment,
         string token,
         DateTimeOffset expiresAt)
     {
         httpContext.Response.Cookies.Append(
             RefreshTokenCookieName,
             token,
-            BuildCookieOptions(httpContext, environment, expiresAt));
+            BuildCookieOptions(expiresAt));
     }
 
-    private static void ClearRefreshTokenCookie(HttpContext httpContext, IWebHostEnvironment environment)
+    private static void ClearRefreshTokenCookie(HttpContext httpContext)
     {
         httpContext.Response.Cookies.Delete(
             RefreshTokenCookieName,
-            BuildCookieOptions(httpContext, environment, DateTimeOffset.UtcNow.AddDays(-1)));
+            BuildCookieOptions(DateTimeOffset.UtcNow.AddDays(-1)));
     }
 
-    private static CookieOptions BuildCookieOptions(
-        HttpContext httpContext,
-        IWebHostEnvironment environment,
-        DateTimeOffset expiresAt) => new()
-        {
-            HttpOnly = true,
-            Secure = !environment.IsDevelopment() || httpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Strict,
-            Path = "/api/auth",
-            Expires = expiresAt,
-            IsEssential = true
-        };
+    private static CookieOptions BuildCookieOptions(DateTimeOffset expiresAt) => new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/api/auth",
+        Expires = expiresAt,
+        IsEssential = true
+    };
 
     private static IResult ToProblemResult(AppError error)
     {
