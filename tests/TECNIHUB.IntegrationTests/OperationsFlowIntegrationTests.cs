@@ -102,12 +102,12 @@ public sealed class OperationsFlowIntegrationTests : IDisposable
         Assert.True(cpLookup!.Found);
         Assert.Contains("Centro", cpLookup.Neighborhoods);
 
-        // Client publishes repair request
+        // Client publishes repair request (mandatory 1..6 images)
         var createRepair = await clientHttp.PostAsJsonAsync("/api/repairs", new CreateRepairRequestInput(
             "Lavadora", "LG TurboDrum", "No centrifuga y marca error OE al drenar agua.",
             DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), "Tarde (14:00 - 18:00)",
             "42800", "Hidalgo", "Tula de Allende", "Tula de Allende", "Centro",
-            "Calle Zarco", "12", null, "Portón blanco", null));
+            "Calle Zarco", "12", null, "Portón blanco", ["https://i.ibb.co/1/lavadora.jpg"]));
         Assert.Equal(HttpStatusCode.Created, createRepair.StatusCode);
         var createdRepair = await createRepair.Content.ReadFromJsonAsync<RepairDetailDto>();
         Assert.NotNull(createdRepair);
@@ -148,11 +148,21 @@ public sealed class OperationsFlowIntegrationTests : IDisposable
         var tech1Thread = await tech1Http.GetFromJsonAsync<ChatThreadDto>($"/api/chat/conversations/{convId}/messages");
         Assert.Single(tech1Thread!.Messages);
 
-        // Schedule + Two-step closure
+        // Schedule + Arrival PIN + Two-step closure
         var scheduleResp = await tech1Http.PutAsJsonAsync($"/api/repairs/{createdRepair.Id}/schedule", new ScheduleRepairInput(DateTimeOffset.UtcNow.AddHours(4)));
         Assert.Equal(HttpStatusCode.OK, scheduleResp.StatusCode);
 
-        var startResp = await tech1Http.PostAsync($"/api/repairs/{createdRepair.Id}/start", null);
+        // Skipping arrival / PIN directly from Scheduled must be blocked (409)
+        var skipStartResp = await tech1Http.PostAsync($"/api/repairs/{createdRepair.Id}/start", null);
+        Assert.Equal(HttpStatusCode.Conflict, skipStartResp.StatusCode);
+
+        var arrivedResp = await tech1Http.PostAsync($"/api/repairs/{createdRepair.Id}/arrived", null);
+        Assert.Equal(HttpStatusCode.OK, arrivedResp.StatusCode);
+
+        var clientDetailForPin = await clientHttp.GetFromJsonAsync<RepairDetailDto>($"/api/repairs/{createdRepair.Id}");
+        Assert.False(string.IsNullOrEmpty(clientDetailForPin!.ClientArrivalPin));
+
+        var startResp = await tech1Http.PostAsJsonAsync($"/api/repairs/{createdRepair.Id}/start", new StartWorkInput(clientDetailForPin.ClientArrivalPin));
         Assert.Equal(HttpStatusCode.OK, startResp.StatusCode);
 
         var reqCloseResp = await tech1Http.PostAsJsonAsync($"/api/repairs/{createdRepair.Id}/request-closure", new RequestClosureInput("Bomba destapada y probada."));
@@ -167,10 +177,10 @@ public sealed class OperationsFlowIntegrationTests : IDisposable
         var msgAfterClose = await tech1Http.PostAsJsonAsync($"/api/chat/conversations/{convId}/messages", new SendChatMessageInput("Listo"));
         Assert.Equal(HttpStatusCode.Conflict, msgAfterClose.StatusCode);
 
-        // Spare parts
+        // Spare parts (mandatory 1..6 images)
         var partCreate = await tech1Http.PostAsJsonAsync("/api/spare-parts", new UpsertSparePartInput(
             "Termostato universal", "Termostato para refrigerador doméstico dos puertas.", "Refrigeración",
-            "Mabe / General Electric", "New", "Sale", 320m, "7735556677", null, null, null));
+            "Mabe / General Electric", "New", "Sale", 320m, "7735556677", null, null, ["https://i.ibb.co/1/termostato.jpg"]));
         Assert.Equal(HttpStatusCode.Created, partCreate.StatusCode);
         var createdPart = await partCreate.Content.ReadFromJsonAsync<SparePartDetailDto>();
         Assert.NotNull(createdPart);

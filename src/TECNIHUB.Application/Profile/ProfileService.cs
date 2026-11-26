@@ -3,6 +3,7 @@ using TECNIHUB.Application.Auth.DTOs;
 using TECNIHUB.Application.Common;
 using TECNIHUB.Domain.Entities;
 using TECNIHUB.Domain.Enums;
+using TECNIHUB.Domain.Rules;
 
 namespace TECNIHUB.Application.Profile;
 
@@ -58,6 +59,7 @@ public sealed class ProfileService : IProfileService
         var lastName = request.LastName?.Trim() ?? string.Empty;
         var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
         var publicRegion = string.IsNullOrWhiteSpace(request.PublicRegion) ? null : request.PublicRegion.Trim();
+        var avatarUrl = string.IsNullOrWhiteSpace(request.AvatarUrl) ? null : request.AvatarUrl.Trim();
 
         if (string.IsNullOrWhiteSpace(firstName) || firstName.Length > 80)
         {
@@ -77,6 +79,11 @@ public sealed class ProfileService : IProfileService
         if (publicRegion is not null && publicRegion.Length > 120)
         {
             errors.Add("La zona general pública no debe superar 120 caracteres.");
+        }
+
+        if (avatarUrl is not null && !ImageSignatureValidator.IsAllowedHostedImageUrl(avatarUrl))
+        {
+            errors.Add("La fotografía de perfil debe cargarse correctamente mediante el servicio de imágenes permitido.");
         }
 
         var isTechnician = user.GetUserRole() == UserRole.Technician;
@@ -126,7 +133,8 @@ public sealed class ProfileService : IProfileService
         }
 
         var utcNow = _clock.UtcNow;
-        user.UpdateBasicProfile(firstName, lastName, phone, utcNow, publicRegion);
+        var avatarChanged = !string.Equals(user.AvatarUrl, avatarUrl, StringComparison.Ordinal);
+        user.UpdateBasicProfile(firstName, lastName, phone, utcNow, publicRegion, avatarUrl);
 
         if (isTechnician)
         {
@@ -158,7 +166,7 @@ public sealed class ProfileService : IProfileService
             outcome: AuditOutcome.Success,
             actorUserId: user.Id,
             actorRole: user.GetUserRole().ToString(),
-            metadata: new { role = user.GetUserRole().ToString(), hasPhone = phone is not null },
+            metadata: new { role = user.GetUserRole().ToString(), hasPhone = phone is not null, avatarChanged },
             ipAddress: metadata.IpAddress,
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
@@ -204,5 +212,6 @@ public sealed class ProfileService : IProfileService
                 user.TechnicianProfile.ExperienceYears,
                 user.TechnicianProfile.ServiceZone,
                 user.TechnicianProfile.BusinessName),
-        user.PublicRegion);
+        user.PublicRegion,
+        user.AvatarUrl);
 }

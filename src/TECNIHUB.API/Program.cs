@@ -6,6 +6,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using TECNIHUB.API.Endpoints;
 using TECNIHUB.API.Health;
+using TECNIHUB.API.Hubs;
+using TECNIHUB.Application.Abstractions;
 using TECNIHUB.Domain.Enums;
 using TECNIHUB.Infrastructure;
 using TECNIHUB.Infrastructure.Security;
@@ -14,7 +16,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+builder.Services.AddSignalR();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
+builder.Services.AddSingleton<IRealtimeNotifier, SignalRRealtimeNotifier>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -42,6 +46,17 @@ builder.Services
         };
         options.Events = new JwtBearerEvents
         {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/realtime"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var sub = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -157,6 +172,8 @@ app.MapRepairRequestEndpoints();
 app.MapSparePartEndpoints();
 app.MapChatEndpoints();
 app.MapPublicProfileEndpoints();
+app.MapNotificationEndpoints();
+app.MapHub<RealtimeHub>("/hubs/realtime");
 
 app.Run();
 

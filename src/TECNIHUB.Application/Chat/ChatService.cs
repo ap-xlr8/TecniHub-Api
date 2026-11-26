@@ -1,8 +1,10 @@
 using TECNIHUB.Application.Abstractions;
 using TECNIHUB.Application.Common;
+using TECNIHUB.Application.Notifications;
 using TECNIHUB.Application.Repairs;
 using TECNIHUB.Domain.Entities;
 using TECNIHUB.Domain.Enums;
+using TECNIHUB.Domain.Rules;
 
 namespace TECNIHUB.Application.Chat;
 
@@ -13,19 +15,25 @@ public sealed class ChatService : IChatService
     private readonly ISparePartRepository _spareParts;
     private readonly IAuditLogger _auditLogger;
     private readonly IDateTimeProvider _clock;
+    private readonly INotificationService? _notifications;
+    private readonly IRealtimeNotifier? _realtime;
 
     public ChatService(
         IChatRepository chat,
         IRepairRequestRepository repairs,
         ISparePartRepository spareParts,
         IAuditLogger auditLogger,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        INotificationService? notifications = null,
+        IRealtimeNotifier? realtime = null)
     {
         _chat = chat;
         _repairs = repairs;
         _spareParts = spareParts;
         _auditLogger = auditLogger;
         _clock = clock;
+        _notifications = notifications;
+        _realtime = realtime;
     }
 
     public async Task<Result<IReadOnlyList<ChatConversationSummaryDto>>> GetMyConversationsAsync(
@@ -96,7 +104,7 @@ public sealed class ChatService : IChatService
                 "No participas en esta solicitud de reparación."));
         }
 
-        var existing = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
+        var existing = await _chat.GetByRepairRequestAndTechnicianAsync(repair.Id, repair.AssignedTechnicianId.Value, cancellationToken);
         if (existing is null)
         {
             var utcNow = _clock.UtcNow;
@@ -270,12 +278,21 @@ public sealed class ChatService : IChatService
         }
 
         var body = input.Body?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(body) || body.Length > ChatMessage.MaxBodyLength)
+        var imageUrl = string.IsNullOrWhiteSpace(input.ImageUrl) ? null : input.ImageUrl.Trim();
+        if ((string.IsNullOrWhiteSpace(body) && imageUrl is null) || body.Length > ChatMessage.MaxBodyLength)
         {
             return Result<ChatMessageDto>.Failure(new AppError(
                 ErrorType.Validation,
                 "invalid_message_body",
-                $"El mensaje debe contener entre 1 y {ChatMessage.MaxBodyLength} caracteres."));
+                $"Escribe un mensaje (máximo {ChatMessage.MaxBodyLength} caracteres) o adjunta una fotografía."));
+        }
+
+        if (imageUrl is not null && !ImageSignatureValidator.IsAllowedHostedImageUrl(imageUrl))
+        {
+            return Result<ChatMessageDto>.Failure(new AppError(
+                ErrorType.Validation,
+                "invalid_message_image",
+                "La imagen adjunta debe haberse cargado en el servicio permitido."));
         }
 
         var utcNow = _clock.UtcNow;
@@ -285,6 +302,7 @@ public sealed class ChatService : IChatService
             ConversationId = conversation.Id,
             SenderUserId = actorUserId,
             Body = body,
+            ImageUrl = imageUrl,
             SentAt = utcNow
         };
 
@@ -301,7 +319,7 @@ public sealed class ChatService : IChatService
             entityId: message.Id.ToString(),
             outcome: AuditOutcome.Success,
             actorUserId: actorUserId,
-            metadata: new { conversationId = conversation.Id, contextType = conversation.ContextType.ToString() },
+            metadata: new { conversationId = conversation.Id, contextType = conversation.ContextType.ToString(), hasImage = imageUrl is not null },
             ipAddress: metadata.IpAddress,
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
@@ -310,6 +328,33 @@ public sealed class ChatService : IChatService
             ? conversation.ParticipantAUser
             : conversation.ParticipantBUser;
         message.SenderUser = senderUser;
+
+        var counterpartId = conversation.GetCounterpartUserId(actorUserId);
+        if (_realtime is not null)
+        {
+            try
+            {
+                await _realtime.NotifyChatMessageAsync(counterpartId, MapMessage(message, counterpartId), cancellationToken);
+            }
+            catch
+            {
+                // Best-effort realtime push.
+            }
+        }
+
+        if (_notifications is not null)
+        {
+            var senderLabel = FormatDisplayName(senderUser);
+            await _notifications.NotifyAsync(
+                counterpartId,
+                "ChatMessage",
+                $"Nuevo mensaje de {senderLabel}",
+                imageUrl is not null && string.IsNullOrWhiteSpace(body)
+                    ? "Te envió una fotografía en la conversación."
+                    : "Tienes un nuevo mensaje en tu bandeja de TECNIHUB.",
+                $"/mensajes/{conversation.Id}",
+                cancellationToken);
+        }
 
         return Result<ChatMessageDto>.Success(MapMessage(message, actorUserId));
     }
@@ -354,7 +399,15 @@ public sealed class ChatService : IChatService
 
         if (conversation.ContextType == ConversationContextType.RepairRequest && conversation.RepairRequest is not null)
         {
-            return conversation.RepairRequest.Status is RepairRequestStatus.Completed or RepairRequestStatus.Cancelled;
+            if (conversation.RepairRequest.Status is RepairRequestStatus.Open or RepairRequestStatus.Completed or RepairRequestStatus.Cancelled)
+            {
+                return true;
+            }
+
+            if (conversation.RepairRequest.AssignedTechnicianId != conversation.ParticipantBUserId)
+            {
+                return true;
+            }
         }
 
         return false;
@@ -387,6 +440,16 @@ public sealed class ChatService : IChatService
 
         var counterpartRoleLabel = counterpartUser?.GetUserRole() == UserRole.Technician ? "Técnico" : "Cliente";
 
+        var preview = latestMessage is null
+            ? null
+            : string.IsNullOrWhiteSpace(latestMessage.Body) && !string.IsNullOrWhiteSpace(latestMessage.ImageUrl)
+                ? "📷 Fotografía adjunta"
+                : Summarize(latestMessage.Body, 80);
+
+        var counterpartAvatar = counterpartUser is null || counterpartUser.Status is AccountStatus.PendingDeletion or AccountStatus.Anonymized
+            ? null
+            : counterpartUser.AvatarUrl;
+
         return new ChatConversationSummaryDto(
             conversation.Id,
             conversation.ContextType.ToString(),
@@ -396,10 +459,11 @@ public sealed class ChatService : IChatService
             counterpartId,
             FormatDisplayName(counterpartUser),
             counterpartRoleLabel,
-            latestMessage is null ? null : Summarize(latestMessage.Body, 80),
+            preview,
             conversation.LastMessageAt ?? latestMessage?.SentAt,
             unreadCount,
-            IsConversationReadOnly(conversation, currentUserId));
+            IsConversationReadOnly(conversation, currentUserId),
+            counterpartAvatar);
     }
 
     private static ChatMessageDto MapMessage(ChatMessage message, Guid currentUserId) => new(
@@ -410,7 +474,8 @@ public sealed class ChatService : IChatService
         message.SenderUserId == currentUserId,
         message.Body,
         message.SentAt,
-        message.ReadAt);
+        message.ReadAt,
+        message.ImageUrl);
 
     private static string FormatDisplayName(User? user)
     {

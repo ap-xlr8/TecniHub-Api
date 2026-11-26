@@ -11,7 +11,8 @@ public sealed record UpdateOwnProfileRequest(
     int? ExperienceYears = null,
     string? ServiceZone = null,
     string? BusinessName = null,
-    string? PublicRegion = null);
+    string? PublicRegion = null,
+    string? AvatarUrl = null);
 
 public interface IProfileService
 {

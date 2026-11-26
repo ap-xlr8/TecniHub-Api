@@ -14,7 +14,8 @@ public sealed record ChatConversationSummaryDto(
     string? LastMessagePreview,
     DateTimeOffset? LastMessageAt,
     int UnreadCount,
-    bool IsReadOnly);
+    bool IsReadOnly,
+    string? CounterpartAvatarUrl = null);
 
 public sealed record ChatMessageDto(
     Guid Id,
@@ -24,13 +25,14 @@ public sealed record ChatMessageDto(
     bool IsMine,
     string Body,
     DateTimeOffset SentAt,
-    DateTimeOffset? ReadAt);
+    DateTimeOffset? ReadAt,
+    string? ImageUrl = null);
 
 public sealed record ChatThreadDto(
     ChatConversationSummaryDto Conversation,
     IReadOnlyList<ChatMessageDto> Messages);
 
-public sealed record SendChatMessageInput(string Body);
+public sealed record SendChatMessageInput(string? Body, string? ImageUrl = null);
 
 public sealed record UnreadCountDto(int UnreadCount);
 

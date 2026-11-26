@@ -1,5 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
 using TECNIHUB.Application.Abstractions;
 using TECNIHUB.Application.Common;
+using TECNIHUB.Application.Notifications;
 using TECNIHUB.Domain.Entities;
 using TECNIHUB.Domain.Enums;
 using TECNIHUB.Domain.Rules;
@@ -14,17 +17,20 @@ public sealed class RepairRequestService : IRepairRequestService
     private readonly IChatRepository _chat;
     private readonly IAuditLogger _auditLogger;
     private readonly IDateTimeProvider _clock;
+    private readonly INotificationService? _notifications;
 
     public RepairRequestService(
         IRepairRequestRepository repairs,
         IChatRepository chat,
         IAuditLogger auditLogger,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        INotificationService? notifications = null)
     {
         _repairs = repairs;
         _chat = chat;
         _auditLogger = auditLogger;
         _clock = clock;
+        _notifications = notifications;
     }
 
     public async Task<Result<RepairDetailDto>> CreateAsync(
@@ -104,46 +110,59 @@ public sealed class RepairRequestService : IRepairRequestService
         CancellationToken cancellationToken = default)
     {
         var items = await _repairs.GetByClientAsync(clientUserId, cancellationToken);
-        var mapped = items.Select(r => new ClientRepairSummaryDto(
-            r.Id,
-            r.ApplianceName,
-            r.BrandModel,
-            Summarize(r.IssueDescription, 140),
-            r.PreferredDate,
-            r.PreferredTimeSlot,
-            MapPublicLocation(r),
-            r.Status.ToString(),
-            GetStatusLabel(r.Status),
-            FormatDisplayName(r.AssignedTechnician),
-            r.ScheduledStartAt,
-            r.ClosureRequestedAt,
-            r.CompletedAt,
-            r.Images.Count,
-            r.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).FirstOrDefault(),
-            r.CreatedAt)).ToArray();
+        var mapped = items.Select(r =>
+        {
+            var orderedUrls = r.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).ToArray();
+            return new ClientRepairSummaryDto(
+                r.Id,
+                r.ApplianceName,
+                r.BrandModel,
+                Summarize(r.IssueDescription, 140),
+                r.PreferredDate,
+                r.PreferredTimeSlot,
+                MapPublicLocation(r),
+                r.Status.ToString(),
+                GetStatusLabel(r.Status),
+                FormatDisplayName(r.AssignedTechnician),
+                r.ScheduledStartAt,
+                r.ClosureRequestedAt,
+                r.CompletedAt,
+                orderedUrls.Length,
+                orderedUrls.FirstOrDefault(),
+                r.CreatedAt,
+                orderedUrls);
+        }).ToArray();
 
         return Result<IReadOnlyList<ClientRepairSummaryDto>>.Success(mapped);
     }
 
     public async Task<Result<IReadOnlyList<OpenRepairBoardItemDto>>> GetOpenBoardAsync(
         string? search,
+        string? state = null,
+        string? municipality = null,
+        string? postalCode = null,
         CancellationToken cancellationToken = default)
     {
-        var items = await _repairs.GetOpenBoardAsync(search, cancellationToken);
+        var items = await _repairs.GetOpenBoardAsync(search, state, municipality, postalCode, cancellationToken);
         // Never project street/numbers or client PII onto the open board DTO.
-        var mapped = items.Select(r => new OpenRepairBoardItemDto(
-            r.Id,
-            r.ApplianceName,
-            r.BrandModel,
-            Summarize(r.IssueDescription, 160),
-            r.PreferredDate,
-            r.PreferredTimeSlot,
-            MapPublicLocation(r),
-            r.Status.ToString(),
-            GetStatusLabel(r.Status),
-            r.Images.Count,
-            r.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).FirstOrDefault(),
-            r.CreatedAt)).ToArray();
+        var mapped = items.Select(r =>
+        {
+            var orderedUrls = r.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).ToArray();
+            return new OpenRepairBoardItemDto(
+                r.Id,
+                r.ApplianceName,
+                r.BrandModel,
+                Summarize(r.IssueDescription, 160),
+                r.PreferredDate,
+                r.PreferredTimeSlot,
+                MapPublicLocation(r),
+                r.Status.ToString(),
+                GetStatusLabel(r.Status),
+                orderedUrls.Length,
+                orderedUrls.FirstOrDefault(),
+                r.CreatedAt,
+                orderedUrls);
+        }).ToArray();
 
         return Result<IReadOnlyList<OpenRepairBoardItemDto>>.Success(mapped);
     }
@@ -157,6 +176,8 @@ public sealed class RepairRequestService : IRepairRequestService
             .Where(r => r.ScheduledStartAt.HasValue
                 && r.Status is RepairRequestStatus.Assigned
                     or RepairRequestStatus.Scheduled
+                    or RepairRequestStatus.OnTheWay
+                    or RepairRequestStatus.Arrived
                     or RepairRequestStatus.InProgress
                     or RepairRequestStatus.ClosureRequested)
             .ToList();
@@ -175,6 +196,11 @@ public sealed class RepairRequestService : IRepairRequestService
                         && other.ScheduledStartAt.HasValue
                         && Math.Abs((other.ScheduledStartAt.Value - r.ScheduledStartAt.Value).TotalMinutes) < OverlapWindowMinutes);
 
+                var orderedImages = r.Images
+                    .OrderBy(i => i.DisplayOrder)
+                    .Select(i => i.ImageUrl)
+                    .ToArray();
+
                 return new ItineraryItemDto(
                     r.Id,
                     r.ApplianceName,
@@ -188,7 +214,10 @@ public sealed class RepairRequestService : IRepairRequestService
                     r.Status.ToString(),
                     GetStatusLabel(r.Status),
                     hasOverlap,
-                    r.AssignedAt ?? r.CreatedAt);
+                    r.AssignedAt ?? r.CreatedAt,
+                    orderedImages.Length,
+                    orderedImages.FirstOrDefault(),
+                    orderedImages);
             })
             .ToArray();
 
@@ -223,9 +252,9 @@ public sealed class RepairRequestService : IRepairRequestService
         }
 
         Guid? conversationId = null;
-        if (repair.IsConfirmedAssignment && (isOwner || isAssignedTech))
+        if (repair.IsConfirmedAssignment && repair.AssignedTechnicianId.HasValue && (isOwner || isAssignedTech))
         {
-            var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
+            var conversation = await _chat.GetByRepairRequestAndTechnicianAsync(repair.Id, repair.AssignedTechnicianId.Value, cancellationToken);
             conversationId = conversation?.Id;
         }
 
@@ -333,7 +362,7 @@ public sealed class RepairRequestService : IRepairRequestService
                 "Solicitud no encontrada tras la asignación."));
         }
 
-        var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
+        var conversation = await _chat.GetByRepairRequestAndTechnicianAsync(repair.Id, technicianUserId, cancellationToken);
         if (conversation is null)
         {
             conversation = new ChatConversation
@@ -361,6 +390,14 @@ public sealed class RepairRequestService : IRepairRequestService
             ipAddress: metadata.IpAddress,
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
+
+        await NotifySafeAsync(
+            repair.ClientUserId,
+            "RepairAccepted",
+            "Un técnico aceptó tu solicitud",
+            $"{FormatDisplayName(repair.AssignedTechnician) ?? "Un técnico"} aceptó atender tu {repair.ApplianceName}. Ya puedes chatear y revisar su perfil.",
+            $"/cliente/solicitudes/{repair.Id}",
+            cancellationToken);
 
         return Result<RepairDetailDto>.Success(MapDetail(repair, technicianUserId, conversation.Id));
     }
@@ -431,6 +468,14 @@ public sealed class RepairRequestService : IRepairRequestService
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
 
+        await NotifySafeAsync(
+            repair.ClientUserId,
+            "RepairScheduled",
+            "Cita programada",
+            $"Tu técnico programó la visita para tu {repair.ApplianceName}.",
+            $"/cliente/solicitudes/{repair.Id}",
+            cancellationToken);
+
         var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
         return Result<ScheduleRepairResponse>.Success(new ScheduleRepairResponse(
             MapDetail(repair, technicianUserId, conversation?.Id),
@@ -438,7 +483,80 @@ public sealed class RepairRequestService : IRepairRequestService
             overlaps));
     }
 
-    public async Task<Result<RepairDetailDto>> StartWorkAsync(
+    public async Task<Result<RepairDetailDto>> MarkOnTheWayAsync(
+        Guid repairId,
+        Guid technicianUserId,
+        MarkOnTheWayInput input,
+        RequestMetadata metadata,
+        CancellationToken cancellationToken = default)
+    {
+        if (input.EstimatedArrivalMinutes is < 5 or > 180)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Validation,
+                "invalid_eta",
+                "El tiempo estimado de llegada debe estar entre 5 y 180 minutos."));
+        }
+
+        var repair = await _repairs.GetByIdAsync(repairId, cancellationToken);
+        if (repair is null || repair.DeletedAt.HasValue)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.NotFound,
+                "repair_not_found",
+                "Solicitud de reparación no encontrada."));
+        }
+
+        if (repair.AssignedTechnicianId != technicianUserId)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Forbidden,
+                "repair_not_assigned_to_technician",
+                "Solo el técnico asignado puede actualizar el estado de traslado."));
+        }
+
+        var utcNow = _clock.UtcNow;
+        var pin = GenerateArrivalPin();
+        if (!repair.MarkOnTheWay(technicianUserId, input.EstimatedArrivalMinutes, pin, utcNow))
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Conflict,
+                "invalid_state_transition",
+                "Solo puedes marcar En camino cuando la solicitud está Asignada o Programada."));
+        }
+
+        await _repairs.SaveChangesAsync(cancellationToken);
+
+        // Never log the arrival PIN in audit_logs.
+        await _auditLogger.LogAsync(
+            action: "RepairTechnicianOnTheWay",
+            entityName: "RepairRequest",
+            entityId: repair.Id.ToString(),
+            outcome: AuditOutcome.Success,
+            actorUserId: technicianUserId,
+            actorRole: nameof(UserRole.Technician),
+            metadata: new { estimatedArrivalMinutes = repair.EstimatedArrivalMinutes },
+            ipAddress: metadata.IpAddress,
+            userAgent: metadata.UserAgent,
+            cancellationToken: cancellationToken);
+
+        var etaText = repair.EstimatedArrivalMinutes.HasValue
+            ? $" Tiempo estimado: ~{repair.EstimatedArrivalMinutes} min."
+            : string.Empty;
+
+        await NotifySafeAsync(
+            repair.ClientUserId,
+            "RepairTechnicianOnTheWay",
+            "Tu técnico va en camino",
+            $"El técnico salió rumbo a tu domicilio para atender tu {repair.ApplianceName}.{etaText} Revisa tu código de llegada en el detalle.",
+            $"/cliente/solicitudes/{repair.Id}",
+            cancellationToken);
+
+        var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
+        return Result<RepairDetailDto>.Success(MapDetail(repair, technicianUserId, conversation?.Id));
+    }
+
+    public async Task<Result<RepairDetailDto>> MarkArrivedAsync(
         Guid repairId,
         Guid technicianUserId,
         RequestMetadata metadata,
@@ -458,16 +576,132 @@ public sealed class RepairRequestService : IRepairRequestService
             return Result<RepairDetailDto>.Failure(new AppError(
                 ErrorType.Forbidden,
                 "repair_not_assigned_to_technician",
-                "Solo el técnico asignado puede iniciar esta reparación."));
+                "Solo el técnico asignado puede confirmar su llegada."));
         }
 
         var utcNow = _clock.UtcNow;
+        var pin = GenerateArrivalPin();
+        if (!repair.MarkArrived(technicianUserId, pin, utcNow))
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Conflict,
+                "invalid_state_transition",
+                "Solo puedes marcar llegada desde Asignada, Programada o En camino."));
+        }
+
+        await _repairs.SaveChangesAsync(cancellationToken);
+
+        await _auditLogger.LogAsync(
+            action: "RepairTechnicianArrived",
+            entityName: "RepairRequest",
+            entityId: repair.Id.ToString(),
+            outcome: AuditOutcome.Success,
+            actorUserId: technicianUserId,
+            actorRole: nameof(UserRole.Technician),
+            ipAddress: metadata.IpAddress,
+            userAgent: metadata.UserAgent,
+            cancellationToken: cancellationToken);
+
+        await NotifySafeAsync(
+            repair.ClientUserId,
+            "RepairTechnicianArrived",
+            "Tu técnico llegó al domicilio",
+            $"El técnico ya se encuentra en tu domicilio para revisar tu {repair.ApplianceName}. Compártele tu código PIN de 4 dígitos para iniciar.",
+            $"/cliente/solicitudes/{repair.Id}",
+            cancellationToken);
+
+        var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
+        return Result<RepairDetailDto>.Success(MapDetail(repair, technicianUserId, conversation?.Id));
+    }
+
+    public async Task<Result<RepairDetailDto>> StartWorkAsync(
+        Guid repairId,
+        Guid technicianUserId,
+        RequestMetadata metadata,
+        StartWorkInput? input = null,
+        CancellationToken cancellationToken = default)
+    {
+        var repair = await _repairs.GetByIdAsync(repairId, cancellationToken);
+        if (repair is null || repair.DeletedAt.HasValue)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.NotFound,
+                "repair_not_found",
+                "Solicitud de reparación no encontrada."));
+        }
+
+        if (repair.AssignedTechnicianId != technicianUserId)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Forbidden,
+                "repair_not_assigned_to_technician",
+                "Solo el técnico asignado puede iniciar esta reparación."));
+        }
+
+        if (repair.Status is not (RepairRequestStatus.OnTheWay or RepairRequestStatus.Arrived)
+            || string.IsNullOrEmpty(repair.ArrivalPinCode))
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Conflict,
+                "invalid_state_transition",
+                "Debes marcar En camino o En el domicilio y verificar el código PIN del cliente antes de iniciar la reparación."));
+        }
+
+        var utcNow = _clock.UtcNow;
+        var supplied = input?.ArrivalPinCode?.Trim() ?? string.Empty;
+        if (!PinMatchesConstantTime(repair.ArrivalPinCode, supplied))
+        {
+            repair.ArrivalPinFailedAttempts++;
+            var rotated = false;
+            if (repair.ArrivalPinFailedAttempts >= 5)
+            {
+                repair.RotateArrivalPin(GenerateArrivalPin(), utcNow);
+                rotated = true;
+            }
+            else
+            {
+                repair.UpdatedAt = utcNow;
+            }
+
+            await _repairs.SaveChangesAsync(cancellationToken);
+
+            await _auditLogger.LogAsync(
+                action: "RepairArrivalPinInvalid",
+                entityName: "RepairRequest",
+                entityId: repair.Id.ToString(),
+                outcome: AuditOutcome.Failure,
+                actorUserId: technicianUserId,
+                actorRole: nameof(UserRole.Technician),
+                metadata: new { failedAttempts = repair.ArrivalPinFailedAttempts, pinRotated = rotated },
+                ipAddress: metadata.IpAddress,
+                userAgent: metadata.UserAgent,
+                cancellationToken: cancellationToken);
+
+            if (rotated)
+            {
+                await NotifySafeAsync(
+                    repair.ClientUserId,
+                    "RepairArrivalPinRotated",
+                    "Nuevo código de llegada generado",
+                    $"Por seguridad se generó un nuevo código PIN de llegada para tu {repair.ApplianceName}. Consúltalo en el detalle.",
+                    $"/cliente/solicitudes/{repair.Id}",
+                    cancellationToken);
+            }
+
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Validation,
+                "invalid_arrival_pin",
+                rotated
+                    ? "Demasiados intentos fallidos. Por seguridad se generó un nuevo código PIN para el cliente."
+                    : "Ingresa el código PIN de 4 dígitos proporcionado por el cliente en el domicilio para iniciar la reparación."));
+        }
+
         if (!repair.StartWork(technicianUserId, utcNow))
         {
             return Result<RepairDetailDto>.Failure(new AppError(
                 ErrorType.Conflict,
                 "invalid_state_transition",
-                "El servicio debe estar en estado Asignada o Programada para iniciar la reparación."));
+                "El servicio debe estar En camino o En el domicilio para iniciar la reparación."));
         }
 
         await _repairs.SaveChangesAsync(cancellationToken);
@@ -482,6 +716,14 @@ public sealed class RepairRequestService : IRepairRequestService
             ipAddress: metadata.IpAddress,
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
+
+        await NotifySafeAsync(
+            repair.ClientUserId,
+            "RepairStarted",
+            "Reparación iniciada",
+            $"Tu reparación de {repair.ApplianceName} ya está En proceso.",
+            $"/cliente/solicitudes/{repair.Id}",
+            cancellationToken);
 
         var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
         return Result<RepairDetailDto>.Success(MapDetail(repair, technicianUserId, conversation?.Id));
@@ -541,8 +783,86 @@ public sealed class RepairRequestService : IRepairRequestService
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
 
+        await NotifySafeAsync(
+            repair.ClientUserId,
+            "RepairClosureRequested",
+            "Confirmación de cierre pendiente",
+            $"El técnico solicitó cerrar tu servicio de {repair.ApplianceName}. Revísalo y confirma o reporta cualquier pendiente.",
+            $"/cliente/solicitudes/{repair.Id}",
+            cancellationToken);
+
         var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
         return Result<RepairDetailDto>.Success(MapDetail(repair, technicianUserId, conversation?.Id));
+    }
+
+    public async Task<Result<RepairDetailDto>> RejectClosureAsync(
+        Guid repairId,
+        Guid clientUserId,
+        RejectClosureInput input,
+        RequestMetadata metadata,
+        CancellationToken cancellationToken = default)
+    {
+        var reason = input.Reason?.Trim() ?? string.Empty;
+        if (reason.Length < 5 || reason.Length > 500)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Validation,
+                "validation_error",
+                "Indica el motivo o pendiente detectado (entre 5 y 500 caracteres)."));
+        }
+
+        var repair = await _repairs.GetByIdAsync(repairId, cancellationToken);
+        if (repair is null || repair.DeletedAt.HasValue)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.NotFound,
+                "repair_not_found",
+                "Solicitud de reparación no encontrada."));
+        }
+
+        if (repair.ClientUserId != clientUserId)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Forbidden,
+                "repair_not_owned",
+                "Solo el cliente propietario puede devolver el cierre del servicio."));
+        }
+
+        var utcNow = _clock.UtcNow;
+        if (!repair.RejectClosure(clientUserId, reason, utcNow))
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Conflict,
+                "invalid_state_transition",
+                "Solo puedes reportar un pendiente cuando el técnico ya solicitó el cierre."));
+        }
+
+        await _repairs.SaveChangesAsync(cancellationToken);
+
+        await _auditLogger.LogAsync(
+            action: "RepairClosureRejected",
+            entityName: "RepairRequest",
+            entityId: repair.Id.ToString(),
+            outcome: AuditOutcome.Success,
+            actorUserId: clientUserId,
+            actorRole: nameof(UserRole.Client),
+            ipAddress: metadata.IpAddress,
+            userAgent: metadata.UserAgent,
+            cancellationToken: cancellationToken);
+
+        if (repair.AssignedTechnicianId.HasValue)
+        {
+            await NotifySafeAsync(
+                repair.AssignedTechnicianId.Value,
+                "RepairClosureRejected",
+                "El cliente reportó un pendiente",
+                $"El servicio de {repair.ApplianceName} regresó a En proceso. Revisa el comentario del cliente.",
+                $"/tecnico/servicios/{repair.Id}",
+                cancellationToken);
+        }
+
+        var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
+        return Result<RepairDetailDto>.Success(MapDetail(repair, clientUserId, conversation?.Id));
     }
 
     public async Task<Result<RepairDetailDto>> ConfirmClosureAsync(
@@ -590,16 +910,104 @@ public sealed class RepairRequestService : IRepairRequestService
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
 
+        if (repair.AssignedTechnicianId.HasValue)
+        {
+            await NotifySafeAsync(
+                repair.AssignedTechnicianId.Value,
+                "RepairCompleted",
+                "Servicio confirmado como Completado",
+                $"El cliente confirmó la finalización del servicio de {repair.ApplianceName}.",
+                $"/tecnico/servicios/{repair.Id}",
+                cancellationToken);
+        }
+
         var conversation = await _chat.GetByRepairRequestIdAsync(repair.Id, cancellationToken);
         return Result<RepairDetailDto>.Success(MapDetail(repair, clientUserId, conversation?.Id));
+    }
+
+    public async Task<Result<RepairDetailDto>> ReleaseByTechnicianAsync(
+        Guid repairId,
+        Guid technicianUserId,
+        ReleaseRepairInput input,
+        RequestMetadata metadata,
+        CancellationToken cancellationToken = default)
+    {
+        var reason = input.Reason?.Trim() ?? string.Empty;
+        if (reason.Length < 5 || reason.Length > 300)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Validation,
+                "validation_error",
+                "Indica el motivo por el que liberas la asignación (entre 5 y 300 caracteres)."));
+        }
+
+        var repair = await _repairs.GetByIdAsync(repairId, cancellationToken);
+        if (repair is null || repair.DeletedAt.HasValue)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.NotFound,
+                "repair_not_found",
+                "Solicitud de reparación no encontrada."));
+        }
+
+        if (repair.AssignedTechnicianId != technicianUserId)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Forbidden,
+                "repair_not_assigned_to_technician",
+                "Solo el técnico asignado puede liberar esta solicitud."));
+        }
+
+        var utcNow = _clock.UtcNow;
+        if (!repair.ReleaseByTechnician(technicianUserId, utcNow))
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Conflict,
+                "invalid_state_transition",
+                "Solo puedes liberar una solicitud antes de llegar al domicilio o iniciar la reparación."));
+        }
+
+        await _repairs.SaveChangesAsync(cancellationToken);
+
+        await _auditLogger.LogAsync(
+            action: "RepairAssignmentReleased",
+            entityName: "RepairRequest",
+            entityId: repair.Id.ToString(),
+            outcome: AuditOutcome.Success,
+            actorUserId: technicianUserId,
+            actorRole: nameof(UserRole.Technician),
+            metadata: new { reasonLength = reason.Length },
+            ipAddress: metadata.IpAddress,
+            userAgent: metadata.UserAgent,
+            cancellationToken: cancellationToken);
+
+        await NotifySafeAsync(
+            repair.ClientUserId,
+            "RepairReleased",
+            "Tu solicitud volvió a estar disponible",
+            $"El técnico liberó tu solicitud de {repair.ApplianceName} ({reason}). Ya está nuevamente visible en el tablón para otro técnico.",
+            $"/cliente/solicitudes/{repair.Id}",
+            cancellationToken);
+
+        return Result<RepairDetailDto>.Success(MapDetail(repair, technicianUserId, conversationId: null));
     }
 
     public async Task<Result<RepairDetailDto>> CancelAsync(
         Guid repairId,
         Guid clientUserId,
         RequestMetadata metadata,
+        CancelRepairInput? input = null,
         CancellationToken cancellationToken = default)
     {
+        var reason = TrimOrNull(input?.Reason);
+        if (reason is not null && reason.Length > 300)
+        {
+            return Result<RepairDetailDto>.Failure(new AppError(
+                ErrorType.Validation,
+                "validation_error",
+                "El motivo de cancelación no debe superar 300 caracteres."));
+        }
+
         var repair = await _repairs.GetByIdAsync(repairId, cancellationToken);
         if (repair is null || repair.DeletedAt.HasValue)
         {
@@ -618,13 +1026,30 @@ public sealed class RepairRequestService : IRepairRequestService
         }
 
         var utcNow = _clock.UtcNow;
-        var cancelled = await _repairs.TryCancelAtomicAsync(repair.Id, clientUserId, utcNow, cancellationToken);
-        if (!cancelled)
+        var previousTechnicianId = repair.AssignedTechnicianId;
+
+        if (repair.Status == RepairRequestStatus.Open && !previousTechnicianId.HasValue && reason is null)
         {
-            return Result<RepairDetailDto>.Failure(new AppError(
-                ErrorType.Conflict,
-                "invalid_state_transition",
-                "Solo es posible cancelar una solicitud mientras siga disponible y sin técnico asignado."));
+            var cancelled = await _repairs.TryCancelAtomicAsync(repair.Id, clientUserId, utcNow, cancellationToken);
+            if (!cancelled)
+            {
+                return Result<RepairDetailDto>.Failure(new AppError(
+                    ErrorType.Conflict,
+                    "invalid_state_transition",
+                    "No fue posible cancelar la solicitud en su estado actual."));
+            }
+        }
+        else
+        {
+            if (!repair.Cancel(utcNow, reason))
+            {
+                return Result<RepairDetailDto>.Failure(new AppError(
+                    ErrorType.Conflict,
+                    "invalid_state_transition",
+                    "Solo es posible cancelar una solicitud antes de que el técnico salga hacia tu domicilio."));
+            }
+
+            await _repairs.SaveChangesAsync(cancellationToken);
         }
 
         await _auditLogger.LogAsync(
@@ -634,9 +1059,21 @@ public sealed class RepairRequestService : IRepairRequestService
             outcome: AuditOutcome.Success,
             actorUserId: clientUserId,
             actorRole: nameof(UserRole.Client),
+            metadata: new { hadAssignedTechnician = previousTechnicianId.HasValue },
             ipAddress: metadata.IpAddress,
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
+
+        if (previousTechnicianId.HasValue)
+        {
+            await NotifySafeAsync(
+                previousTechnicianId.Value,
+                "RepairCancelled",
+                "Solicitud cancelada por el cliente",
+                $"El cliente canceló la solicitud de {repair.ApplianceName}.",
+                $"/tecnico/servicios/{repair.Id}",
+                cancellationToken);
+        }
 
         var updated = await _repairs.GetByIdAsync(repair.Id, cancellationToken) ?? repair;
         return Result<RepairDetailDto>.Success(MapDetail(updated, clientUserId, conversationId: null));
@@ -647,12 +1084,40 @@ public sealed class RepairRequestService : IRepairRequestService
         RepairRequestStatus.Open => "Disponible",
         RepairRequestStatus.Assigned => "Asignada",
         RepairRequestStatus.Scheduled => "Programada",
+        RepairRequestStatus.OnTheWay => "En camino",
+        RepairRequestStatus.Arrived => "En el domicilio",
         RepairRequestStatus.InProgress => "En proceso",
         RepairRequestStatus.ClosureRequested => "Cierre solicitado",
         RepairRequestStatus.Completed => "Completado",
         RepairRequestStatus.Cancelled => "Cancelada",
         _ => "Desconocido"
     };
+
+    private async Task NotifySafeAsync(
+        Guid recipientUserId,
+        string type,
+        string title,
+        string body,
+        string actionUrl,
+        CancellationToken cancellationToken)
+    {
+        if (_notifications is null)
+        {
+            return;
+        }
+
+        await _notifications.NotifyAsync(recipientUserId, type, title, body, actionUrl, cancellationToken);
+    }
+
+    private static string GenerateArrivalPin() =>
+        RandomNumberGenerator.GetInt32(1000, 10000).ToString("D4");
+
+    private static bool PinMatchesConstantTime(string expected, string supplied)
+    {
+        var a = Encoding.UTF8.GetBytes(expected);
+        var b = Encoding.UTF8.GetBytes(supplied);
+        return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
+    }
 
     private static List<string> ValidateCreateInput(CreateRepairRequestInput input, DateTimeOffset utcNow)
     {
@@ -736,18 +1201,20 @@ public sealed class RepairRequestService : IRepairRequestService
     private static List<string> ValidateImageUrls(IReadOnlyList<string>? imageUrls)
     {
         var errors = new List<string>();
-        if (imageUrls is null || imageUrls.Count == 0)
+        var normalized = NormalizeImageUrls(imageUrls);
+        if (normalized.Length < RepairRequest.MinImages)
         {
+            errors.Add($"Adjunta al menos {RepairRequest.MinImages} fotografía de referencia (máximo {RepairRequest.MaxImages}).");
             return errors;
         }
 
-        if (imageUrls.Count > RepairRequest.MaxImages)
+        if (normalized.Length > RepairRequest.MaxImages)
         {
             errors.Add($"Solo se permiten hasta {RepairRequest.MaxImages} imágenes por solicitud.");
             return errors;
         }
 
-        foreach (var url in imageUrls)
+        foreach (var url in normalized)
         {
             if (!ImageSignatureValidator.IsAllowedHostedImageUrl(url))
             {
@@ -774,6 +1241,9 @@ public sealed class RepairRequestService : IRepairRequestService
     private static RepairDetailDto MapDetail(RepairRequest repair, Guid actorUserId, Guid? conversationId)
     {
         var canSeeFullAddress = repair.CanExposeFullAddressTo(actorUserId);
+        var isOwnerClient = actorUserId == repair.ClientUserId;
+        var hasArrivalPin = !string.IsNullOrEmpty(repair.ArrivalPinCode);
+
         return new RepairDetailDto(
             repair.Id,
             canSeeFullAddress ? repair.ClientUserId : Guid.Empty,
@@ -801,7 +1271,26 @@ public sealed class RepairRequestService : IRepairRequestService
             repair.CreatedAt,
             repair.UpdatedAt,
             repair.Images.OrderBy(i => i.DisplayOrder).Select(i => new ImageItemDto(i.Id, i.ImageUrl, i.DisplayOrder)).ToArray(),
-            conversationId);
+            conversationId,
+            repair.EnRouteAt,
+            repair.EstimatedArrivalMinutes,
+            repair.ArrivedAt,
+            isOwnerClient ? repair.ArrivalPinCode : null,
+            hasArrivalPin,
+            repair.ClosureRejectionReason,
+            repair.CancellationReason,
+            FormatAvatarUrl(repair.AssignedTechnician),
+            canSeeFullAddress ? FormatAvatarUrl(repair.ClientUser) : null);
+    }
+
+    private static string? FormatAvatarUrl(User? user)
+    {
+        if (user is null || user.Status is AccountStatus.PendingDeletion or AccountStatus.Anonymized)
+        {
+            return null;
+        }
+
+        return user.AvatarUrl;
     }
 
     private static string? FormatDisplayName(User? user)

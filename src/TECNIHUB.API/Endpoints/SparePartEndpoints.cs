@@ -42,6 +42,12 @@ public static class SparePartEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapDelete("/{id:guid}", DeleteAsync)
+            .WithName("DeleteSparePart")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -49,10 +55,13 @@ public static class SparePartEndpoints
         string? search,
         string? category,
         string? modality,
+        string? condition,
+        decimal? minPrice,
+        decimal? maxPrice,
         ISparePartService service,
         CancellationToken cancellationToken)
     {
-        var result = await service.GetAvailableAsync(search, category, modality, cancellationToken);
+        var result = await service.GetAvailableAsync(search, category, modality, condition, minPrice, maxPrice, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
@@ -135,5 +144,21 @@ public static class SparePartEndpoints
 
         var result = await service.SetAvailabilityAsync(id, userId, input, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
+    }
+
+    private static async Task<IResult> DeleteAsync(
+        Guid id,
+        ClaimsPrincipal user,
+        ISparePartService service,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!EndpointHelpers.TryGetUserId(user, out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await service.DeleteAsync(id, userId, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.NoContent() : EndpointHelpers.ToProblemResult(result.Error!);
     }
 }

@@ -51,6 +51,8 @@ public sealed class ServiceReviewRepository : IServiceReviewRepository
                     && r.DeletedAt == null
                     && (r.Status == RepairRequestStatus.Assigned
                         || r.Status == RepairRequestStatus.Scheduled
+                        || r.Status == RepairRequestStatus.OnTheWay
+                        || r.Status == RepairRequestStatus.Arrived
                         || r.Status == RepairRequestStatus.InProgress
                         || r.Status == RepairRequestStatus.ClosureRequested
                         || r.Status == RepairRequestStatus.Completed),

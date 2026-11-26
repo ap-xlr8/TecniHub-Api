@@ -21,7 +21,8 @@ public sealed record SparePartSummaryDto(
     string AvailabilityLabel,
     int ImageCount,
     string? ThumbnailUrl,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<string>? ImageUrls = null);
 
 public sealed record SparePartDetailDto(
     Guid Id,
@@ -46,7 +47,8 @@ public sealed record SparePartDetailDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<ImageItemDto> Images,
-    bool IsOwner);
+    bool IsOwner,
+    string? TechnicianAvatarUrl = null);
 
 public sealed record UpsertSparePartInput(
     string Title,
@@ -66,9 +68,17 @@ public sealed record SetSparePartAvailabilityInput(bool IsAvailable);
 public interface ISparePartService
 {
     Task<Result<SparePartDetailDto>> CreateAsync(Guid technicianUserId, UpsertSparePartInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<SparePartSummaryDto>>> GetAvailableAsync(string? search, string? category, string? modality, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<SparePartSummaryDto>>> GetAvailableAsync(
+        string? search,
+        string? category,
+        string? modality,
+        string? condition = null,
+        decimal? minPriceMxn = null,
+        decimal? maxPriceMxn = null,
+        CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<SparePartSummaryDto>>> GetMineAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
     Task<Result<SparePartDetailDto>> GetDetailAsync(Guid sparePartId, Guid actorTechnicianId, CancellationToken cancellationToken = default);
     Task<Result<SparePartDetailDto>> UpdateAsync(Guid sparePartId, Guid technicianUserId, UpsertSparePartInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
     Task<Result<SparePartDetailDto>> SetAvailabilityAsync(Guid sparePartId, Guid technicianUserId, SetSparePartAvailabilityInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
+    Task<Result<bool>> DeleteAsync(Guid sparePartId, Guid technicianUserId, RequestMetadata metadata, CancellationToken cancellationToken = default);
 }

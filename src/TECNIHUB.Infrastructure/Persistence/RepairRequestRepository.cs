@@ -37,6 +37,9 @@ public sealed class RepairRequestRepository : IRepairRequestRepository
 
     public async Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(
         string? search,
+        string? state = null,
+        string? municipality = null,
+        string? postalCode = null,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.RepairRequests
@@ -58,6 +61,24 @@ public sealed class RepairRequestRepository : IRepairRequestRepository
                 || r.Neighborhood.ToLower().Contains(term)
                 || r.Municipality.ToLower().Contains(term)
                 || r.PostalCode.Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            var st = state.Trim().ToLowerInvariant();
+            query = query.Where(r => r.State.ToLower().Contains(st));
+        }
+
+        if (!string.IsNullOrWhiteSpace(municipality))
+        {
+            var mun = municipality.Trim().ToLowerInvariant();
+            query = query.Where(r => r.Municipality.ToLower().Contains(mun));
+        }
+
+        if (!string.IsNullOrWhiteSpace(postalCode))
+        {
+            var cp = postalCode.Trim();
+            query = query.Where(r => r.PostalCode == cp);
         }
 
         return await query

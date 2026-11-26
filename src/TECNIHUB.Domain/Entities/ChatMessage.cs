@@ -12,6 +12,7 @@ public sealed class ChatMessage
     public User? SenderUser { get; set; }
 
     public string Body { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
     public DateTimeOffset SentAt { get; set; }
     public DateTimeOffset? ReadAt { get; set; }
 }

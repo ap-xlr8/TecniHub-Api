@@ -28,6 +28,9 @@ public sealed class SparePartRepository : ISparePartRepository
         string? search,
         string? category,
         SparePartModality? modality,
+        SparePartCondition? condition = null,
+        decimal? minPriceMxn = null,
+        decimal? maxPriceMxn = null,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.SpareParts
@@ -59,6 +62,21 @@ public sealed class SparePartRepository : ISparePartRepository
         if (modality.HasValue)
         {
             query = query.Where(p => p.Modality == modality.Value);
+        }
+
+        if (condition.HasValue)
+        {
+            query = query.Where(p => p.Condition == condition.Value);
+        }
+
+        if (minPriceMxn.HasValue)
+        {
+            query = query.Where(p => p.PriceMxn >= minPriceMxn.Value);
+        }
+
+        if (maxPriceMxn.HasValue)
+        {
+            query = query.Where(p => p.PriceMxn <= maxPriceMxn.Value);
         }
 
         return await query

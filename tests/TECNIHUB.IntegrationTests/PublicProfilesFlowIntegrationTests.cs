@@ -99,7 +99,7 @@ public sealed class PublicProfilesFlowIntegrationTests : IDisposable
             "Microondas", "LG NeoChef", "No calienta los alimentos aunque el plato gira normalmente.",
             DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), "Mañana (09:00 - 13:00)",
             "42855", "Hidalgo", "Tepeji del Río de Ocampo", "Tepeji del Río de Ocampo", "Tlaxinacalpan",
-            "Calle Privada Secreta", "99", null, "Casa azul", null));
+            "Calle Privada Secreta", "99", null, "Casa azul", ["https://i.ibb.co/1/microondas.jpg"]));
         Assert.Equal(HttpStatusCode.Created, createRepair.StatusCode);
         var repair = (await createRepair.Content.ReadFromJsonAsync<RepairDetailDto>())!;
 
@@ -120,8 +120,10 @@ public sealed class PublicProfilesFlowIntegrationTests : IDisposable
         var earlyReview = await clientHttp.PostAsJsonAsync($"/api/repairs/{repair.Id}/review", new CreateServiceReviewInput(5, "Aún no acaba"));
         Assert.Equal(HttpStatusCode.Conflict, earlyReview.StatusCode);
 
-        // Complete service without requiring review
-        Assert.Equal(HttpStatusCode.OK, (await tech1Http.PostAsync($"/api/repairs/{repair.Id}/start", null)).StatusCode);
+        // Complete service (arrival + PIN verification) without requiring review
+        Assert.Equal(HttpStatusCode.OK, (await tech1Http.PostAsync($"/api/repairs/{repair.Id}/arrived", null)).StatusCode);
+        var pin = (await clientHttp.GetFromJsonAsync<RepairDetailDto>($"/api/repairs/{repair.Id}"))!.ClientArrivalPin;
+        Assert.Equal(HttpStatusCode.OK, (await tech1Http.PostAsJsonAsync($"/api/repairs/{repair.Id}/start", new StartWorkInput(pin))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await tech1Http.PostAsJsonAsync($"/api/repairs/{repair.Id}/request-closure", new RequestClosureInput("Magnetrón cambiado"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await clientHttp.PostAsync($"/api/repairs/{repair.Id}/confirm-closure", null)).StatusCode);
 

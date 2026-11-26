@@ -30,7 +30,20 @@ public sealed class ChatRepository : IChatRepository
             .Include(c => c.ParticipantAUser)
             .Include(c => c.ParticipantBUser)
             .Include(c => c.RepairRequest)
+            .OrderByDescending(c => c.CreatedAt)
             .FirstOrDefaultAsync(c => c.RepairRequestId == repairRequestId, cancellationToken);
+
+    public Task<ChatConversation?> GetByRepairRequestAndTechnicianAsync(
+        Guid repairRequestId,
+        Guid technicianUserId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.ChatConversations
+            .Include(c => c.ParticipantAUser)
+            .Include(c => c.ParticipantBUser)
+            .Include(c => c.RepairRequest)
+            .FirstOrDefaultAsync(
+                c => c.RepairRequestId == repairRequestId && c.ParticipantBUserId == technicianUserId,
+                cancellationToken);
 
     public Task<ChatConversation?> GetBySparePartAndTechnicianAsync(
         Guid sparePartId,
