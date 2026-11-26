@@ -109,10 +109,10 @@ public static class AuthEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await authService.RegisterClientAsync(request, BuildMetadata(httpContext), cancellationToken);
+        var result = await authService.RegisterClientAsync(request, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
         return result.IsSuccess
             ? Results.Created("/api/auth/me", result.Value)
-            : ToProblemResult(result.Error!);
+            : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> RegisterTechnicianAsync(
@@ -121,10 +121,10 @@ public static class AuthEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await authService.RegisterTechnicianAsync(request, BuildMetadata(httpContext), cancellationToken);
+        var result = await authService.RegisterTechnicianAsync(request, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
         return result.IsSuccess
             ? Results.Created("/api/auth/me", result.Value)
-            : ToProblemResult(result.Error!);
+            : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> VerifyEmailAsync(
@@ -133,8 +133,8 @@ public static class AuthEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await authService.VerifyEmailAsync(request, BuildMetadata(httpContext), cancellationToken);
-        return result.IsSuccess ? Results.Ok(result.Value) : ToProblemResult(result.Error!);
+        var result = await authService.VerifyEmailAsync(request, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> ResendVerificationAsync(
@@ -143,8 +143,8 @@ public static class AuthEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await authService.ResendVerificationCodeAsync(request, BuildMetadata(httpContext), cancellationToken);
-        return result.IsSuccess ? Results.Ok(result.Value) : ToProblemResult(result.Error!);
+        var result = await authService.ResendVerificationCodeAsync(request, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> LoginAsync(
@@ -153,10 +153,10 @@ public static class AuthEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await authService.LoginAsync(request, BuildMetadata(httpContext), cancellationToken);
+        var result = await authService.LoginAsync(request, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
         if (!result.IsSuccess)
         {
-            return ToProblemResult(result.Error!);
+            return EndpointHelpers.ToProblemResult(result.Error!);
         }
 
         var session = result.Value!;
@@ -174,11 +174,11 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var rawToken = httpContext.Request.Cookies[RefreshTokenCookieName];
-        var result = await authService.RefreshSessionAsync(rawToken, BuildMetadata(httpContext), cancellationToken);
+        var result = await authService.RefreshSessionAsync(rawToken, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
         if (!result.IsSuccess)
         {
             ClearRefreshTokenCookie(httpContext);
-            return ToProblemResult(result.Error!);
+            return EndpointHelpers.ToProblemResult(result.Error!);
         }
 
         var session = result.Value!;
@@ -201,7 +201,7 @@ public static class AuthEndpoints
             : null;
         var role = httpContext.User.FindFirstValue(ClaimTypes.Role);
 
-        var result = await authService.LogoutAsync(rawToken, userId, role, BuildMetadata(httpContext), cancellationToken);
+        var result = await authService.LogoutAsync(rawToken, userId, role, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
         ClearRefreshTokenCookie(httpContext);
 
         return Results.Ok(result.Value);
@@ -213,8 +213,8 @@ public static class AuthEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await authService.RequestPasswordResetAsync(request, BuildMetadata(httpContext), cancellationToken);
-        return result.IsSuccess ? Results.Ok(result.Value) : ToProblemResult(result.Error!);
+        var result = await authService.RequestPasswordResetAsync(request, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> ConfirmPasswordResetAsync(
@@ -223,8 +223,8 @@ public static class AuthEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await authService.ConfirmPasswordResetAsync(request, BuildMetadata(httpContext), cancellationToken);
-        return result.IsSuccess ? Results.Ok(result.Value) : ToProblemResult(result.Error!);
+        var result = await authService.ConfirmPasswordResetAsync(request, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> GetCurrentUserAsync(
@@ -238,7 +238,7 @@ public static class AuthEndpoints
         }
 
         var result = await authService.GetCurrentUserAsync(userId, cancellationToken);
-        return result.IsSuccess ? Results.Ok(result.Value) : ToProblemResult(result.Error!);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> RequestAccountDeletionAsync(
@@ -252,29 +252,14 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         }
 
-        var result = await authService.RequestAccountDeletionAsync(userId, BuildMetadata(httpContext), cancellationToken);
+        var result = await authService.RequestAccountDeletionAsync(userId, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
         if (!result.IsSuccess)
         {
-            return ToProblemResult(result.Error!);
+            return EndpointHelpers.ToProblemResult(result.Error!);
         }
 
         ClearRefreshTokenCookie(httpContext);
         return Results.Ok(result.Value);
-    }
-
-    private static RequestMetadata BuildMetadata(HttpContext httpContext) => new(
-        Truncate(httpContext.Connection.RemoteIpAddress?.ToString(), 64),
-        Truncate(httpContext.Request.Headers.UserAgent.ToString(), 300));
-
-    private static string? Truncate(string? value, int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim();
-        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
     }
 
     private static void SetRefreshTokenCookie(
@@ -304,35 +289,4 @@ public static class AuthEndpoints
         Expires = expiresAt,
         IsEssential = true
     };
-
-    private static IResult ToProblemResult(AppError error)
-    {
-        var statusCode = error.Type switch
-        {
-            ErrorType.Validation => StatusCodes.Status400BadRequest,
-            ErrorType.Conflict => StatusCodes.Status409Conflict,
-            ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
-            ErrorType.Forbidden => StatusCodes.Status403Forbidden,
-            ErrorType.NotFound => StatusCodes.Status404NotFound,
-            ErrorType.TooManyRequests => StatusCodes.Status429TooManyRequests,
-            ErrorType.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
-            _ => StatusCodes.Status400BadRequest
-        };
-
-        var extensions = new Dictionary<string, object?>
-        {
-            ["code"] = error.Code
-        };
-
-        if (error.Details is { Count: > 0 })
-        {
-            extensions["errors"] = error.Details;
-        }
-
-        return Results.Problem(
-            title: error.Message,
-            detail: error.Message,
-            statusCode: statusCode,
-            extensions: extensions);
-    }
 }

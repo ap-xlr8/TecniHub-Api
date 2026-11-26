@@ -68,39 +68,29 @@ builder.Services.AddAuthorizationBuilder()
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("AuthRateLimit", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = builder.Environment.IsDevelopment() ? 120 : 30,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            }));
+    var isDev = builder.Environment.IsDevelopment();
 
-    options.AddPolicy("MediaUploadRateLimit", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                ?? httpContext.Connection.RemoteIpAddress?.ToString()
-                ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = builder.Environment.IsDevelopment() ? 60 : 20,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            }));
+    static RateLimitPartition<string> CreateFixedWindowPartition(HttpContext context, bool useUserKey, int permitLimit)
+    {
+        var key = useUserKey
+            ? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown"
+            : context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-    options.AddPolicy("ChatRateLimit", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                ?? httpContext.Connection.RemoteIpAddress?.ToString()
-                ?? "unknown",
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: key,
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = builder.Environment.IsDevelopment() ? 120 : 30,
+                PermitLimit = permitLimit,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
-            }));
+            });
+    }
+
+    options.AddPolicy("AuthRateLimit", ctx => CreateFixedWindowPartition(ctx, useUserKey: false, isDev ? 120 : 30));
+    options.AddPolicy("MediaUploadRateLimit", ctx => CreateFixedWindowPartition(ctx, useUserKey: true, isDev ? 60 : 20));
+    options.AddPolicy("ChatRateLimit", ctx => CreateFixedWindowPartition(ctx, useUserKey: true, isDev ? 120 : 30));
 });
 
 var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
