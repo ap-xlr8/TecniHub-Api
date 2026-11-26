@@ -27,7 +27,12 @@ public interface IRepairRequestRepository
     Task AddAsync(RepairRequest request, CancellationToken cancellationToken = default);
     Task<RepairRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RepairRequest>> GetByClientAsync(Guid clientUserId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(string? search, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(
+        string? search,
+        string? state = null,
+        string? municipality = null,
+        string? postalCode = null,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RepairRequest>> GetByAssignedTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
     Task<bool> TryAcceptAtomicAsync(Guid repairRequestId, Guid technicianUserId, DateTimeOffset utcNow, CancellationToken cancellationToken = default);
     Task<bool> TryCancelAtomicAsync(Guid repairRequestId, Guid clientUserId, DateTimeOffset utcNow, CancellationToken cancellationToken = default) => Task.FromResult(false);
@@ -43,6 +48,9 @@ public interface ISparePartRepository
         string? search,
         string? category,
         SparePartModality? modality,
+        SparePartCondition? condition = null,
+        decimal? minPriceMxn = null,
+        decimal? maxPriceMxn = null,
         CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SparePart>> GetByTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
     Task ReplaceImagesAsync(Guid sparePartId, IReadOnlyList<SparePartImage> newImages, DateTimeOffset utcNow, CancellationToken cancellationToken = default);
@@ -53,6 +61,8 @@ public interface IChatRepository
 {
     Task<ChatConversation?> GetConversationByIdAsync(Guid conversationId, CancellationToken cancellationToken = default);
     Task<ChatConversation?> GetByRepairRequestIdAsync(Guid repairRequestId, CancellationToken cancellationToken = default);
+    Task<ChatConversation?> GetByRepairRequestAndTechnicianAsync(Guid repairRequestId, Guid technicianUserId, CancellationToken cancellationToken = default) =>
+        GetByRepairRequestIdAsync(repairRequestId, cancellationToken);
     Task<ChatConversation?> GetBySparePartAndTechnicianAsync(Guid sparePartId, Guid interestedTechnicianId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ChatConversation>> GetUserConversationsAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ChatMessage>> GetMessagesAsync(Guid conversationId, DateTimeOffset? afterUtc, CancellationToken cancellationToken = default);

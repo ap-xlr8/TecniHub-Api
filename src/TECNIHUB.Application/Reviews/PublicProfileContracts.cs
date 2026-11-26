@@ -23,14 +23,16 @@ public sealed record PublicTechnicianProfileDto(
     int CompletedServicesCount,
     int ReviewCount,
     decimal? AverageRating,
-    IReadOnlyList<PublicReviewItemDto> Reviews);
+    IReadOnlyList<PublicReviewItemDto> Reviews,
+    string? AvatarUrl = null);
 
 public sealed record PublicClientProfileDto(
     Guid ClientUserId,
     string DisplayName,
     string? PublicRegion,
     DateTimeOffset MemberSinceUtc,
-    int CompletedServicesCount);
+    int CompletedServicesCount,
+    string? AvatarUrl = null);
 
 public sealed record CreateServiceReviewInput(
     int Rating,

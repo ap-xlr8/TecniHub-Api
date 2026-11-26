@@ -14,6 +14,7 @@ public sealed class User
     public string NormalizedEmail { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public string? PublicRegion { get; set; }
+    public string? AvatarUrl { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
 
     public bool IsEmailVerified { get; set; }
@@ -52,12 +53,14 @@ public sealed class User
         string lastName,
         string? phone,
         DateTimeOffset utcNow,
-        string? publicRegion = null)
+        string? publicRegion = null,
+        string? avatarUrl = null)
     {
         FirstName = firstName;
         LastName = lastName;
         Phone = phone;
         PublicRegion = publicRegion;
+        AvatarUrl = avatarUrl;
         UpdatedAt = utcNow;
     }
 
@@ -78,6 +81,7 @@ public sealed class User
         NormalizedEmail = anonymizedToken.ToUpperInvariant();
         Phone = null;
         PublicRegion = null;
+        AvatarUrl = null;
         PasswordHash = string.Empty;
         Status = AccountStatus.Anonymized;
         UpdatedAt = utcNow;

@@ -284,7 +284,7 @@ public static class AuthEndpoints
     {
         HttpOnly = true,
         Secure = true,
-        SameSite = SameSiteMode.Strict,
+        SameSite = SameSiteMode.None,
         Path = "/api/auth",
         Expires = expiresAt,
         IsEssential = true

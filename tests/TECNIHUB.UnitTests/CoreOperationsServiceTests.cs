@@ -121,11 +121,12 @@ public sealed class CoreOperationsServiceTests
         var chatRepo = new InMemoryChatRepo();
         var sut = new RepairRequestService(repairsRepo, chatRepo, _audit, _clock);
 
-        // Reject more than 5 images
+        // Reject more than 6 images
         var tooManyImages = await sut.CreateAsync(clientId, BuildRepairInput(
             [
                 "https://i.ibb.co/1/a.jpg", "https://i.ibb.co/2/b.jpg", "https://i.ibb.co/3/c.jpg",
-                "https://i.ibb.co/4/d.jpg", "https://i.ibb.co/5/e.jpg", "https://i.ibb.co/6/f.jpg"
+                "https://i.ibb.co/4/d.jpg", "https://i.ibb.co/5/e.jpg", "https://i.ibb.co/6/f.jpg",
+                "https://i.ibb.co/7/g.jpg"
             ]), _meta);
         Assert.False(tooManyImages.IsSuccess);
 
@@ -175,8 +176,11 @@ public sealed class CoreOperationsServiceTests
         Assert.False(unauthorizedSchedule.IsSuccess);
         Assert.Equal(ErrorType.Forbidden, unauthorizedSchedule.Error!.Type);
 
-        // Two-step closure
-        var start = await sut.StartWorkAsync(repairId, techAId, _meta);
+        // Two-step closure (with mandatory arrival PIN verification)
+        var arrived = await sut.MarkArrivedAsync(repairId, techAId, _meta);
+        Assert.True(arrived.IsSuccess);
+        var clientPin = (await sut.GetDetailAsync(repairId, clientId, UserRole.Client)).Value!.ClientArrivalPin;
+        var start = await sut.StartWorkAsync(repairId, techAId, _meta, new StartWorkInput(clientPin));
         Assert.True(start.IsSuccess);
         Assert.Equal("InProgress", start.Value!.Status);
 
@@ -260,7 +264,9 @@ public sealed class CoreOperationsServiceTests
         Assert.DoesNotContain(secretText, sendAudit.Metadata?.ToString() ?? string.Empty);
 
         // When repair completes, chat becomes read-only
-        await repairSut.StartWorkAsync(created.Value.Id, techId, _meta);
+        await repairSut.MarkArrivedAsync(created.Value.Id, techId, _meta);
+        var pin = (await repairSut.GetDetailAsync(created.Value.Id, clientId, UserRole.Client)).Value!.ClientArrivalPin;
+        await repairSut.StartWorkAsync(created.Value.Id, techId, _meta, new StartWorkInput(pin));
         await repairSut.RequestClosureAsync(created.Value.Id, techId, new RequestClosureInput(null), _meta);
         await repairSut.ConfirmClosureAsync(created.Value.Id, clientId, _meta);
 
@@ -284,7 +290,7 @@ public sealed class CoreOperationsServiceTests
         ExteriorNumber: "45",
         InteriorNumber: "2B",
         AddressReference: "Frente al jardín principal",
-        ImageUrls: imageUrls);
+        ImageUrls: imageUrls ?? ["https://i.ibb.co/1/default-repair.jpg"]);
 
     private sealed class FakeClock(DateTimeOffset utcNow) : IDateTimeProvider
     {
@@ -333,7 +339,7 @@ public sealed class CoreOperationsServiceTests
         public Task AddAsync(RepairRequest request, CancellationToken cancellationToken = default) { Items.Add(request); return Task.CompletedTask; }
         public Task<RepairRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Items.FirstOrDefault(r => r.Id == id));
         public Task<IReadOnlyList<RepairRequest>> GetByClientAsync(Guid clientUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.ClientUserId == clientUserId).ToList());
-        public Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(string? search, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.Status == RepairRequestStatus.Open).ToList());
+        public Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(string? search, string? state = null, string? municipality = null, string? postalCode = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.Status == RepairRequestStatus.Open).ToList());
         public Task<IReadOnlyList<RepairRequest>> GetByAssignedTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.AssignedTechnicianId == technicianUserId).ToList());
         public Task<bool> TryAcceptAtomicAsync(Guid repairRequestId, Guid technicianUserId, DateTimeOffset utcNow, CancellationToken cancellationToken = default)
         {
@@ -354,7 +360,7 @@ public sealed class CoreOperationsServiceTests
         public List<SparePart> Items { get; } = [];
         public Task AddAsync(SparePart sparePart, CancellationToken cancellationToken = default) { Items.Add(sparePart); return Task.CompletedTask; }
         public Task<SparePart?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Items.FirstOrDefault(p => p.Id == id));
-        public Task<IReadOnlyList<SparePart>> GetAvailableAsync(string? search, string? category, SparePartModality? modality, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<SparePart>>(Items.Where(p => p.IsAvailable).ToList());
+        public Task<IReadOnlyList<SparePart>> GetAvailableAsync(string? search, string? category, SparePartModality? modality, SparePartCondition? condition = null, decimal? minPriceMxn = null, decimal? maxPriceMxn = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<SparePart>>(Items.Where(p => p.IsAvailable && p.DeletedAt == null).ToList());
         public Task<IReadOnlyList<SparePart>> GetByTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<SparePart>>(Items.Where(p => p.TechnicianUserId == technicianUserId).ToList());
         public Task ReplaceImagesAsync(Guid sparePartId, IReadOnlyList<SparePartImage> newImages, DateTimeOffset utcNow, CancellationToken cancellationToken = default)
         {

@@ -130,13 +130,13 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RepairRequestId")
-                        .IsUnique()
-                        .HasFilter("repair_request_id IS NOT NULL");
-
                     b.HasIndex("ParticipantAUserId", "LastMessageAt");
 
                     b.HasIndex("ParticipantBUserId", "LastMessageAt");
+
+                    b.HasIndex("RepairRequestId", "ParticipantBUserId")
+                        .IsUnique()
+                        .HasFilter("repair_request_id IS NOT NULL");
 
                     b.HasIndex("SparePartId", "ParticipantBUserId")
                         .IsUnique()
@@ -161,6 +161,11 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ConversationId")
                         .HasColumnType("uuid")
                         .HasColumnName("conversation_id");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("image_url");
 
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone")
@@ -244,6 +249,58 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.ToTable("postal_codes", (string)null);
                 });
 
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.PushSubscriptionRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("auth");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("endpoint");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("p256dh");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("user_agent");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("push_subscriptions", (string)null);
+                });
+
             modelBuilder.Entity("TECNIHUB.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -319,6 +376,19 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(120)")
                         .HasColumnName("appliance_name");
 
+                    b.Property<string>("ArrivalPinCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("arrival_pin_code");
+
+                    b.Property<int>("ArrivalPinFailedAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("arrival_pin_failed_attempts");
+
+                    b.Property<DateTimeOffset?>("ArrivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("arrived_at");
+
                     b.Property<DateTimeOffset?>("AssignedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("assigned_at");
@@ -331,6 +401,11 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)")
                         .HasColumnName("brand_model");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("cancellation_reason");
 
                     b.Property<DateTimeOffset?>("CancelledAt")
                         .HasColumnType("timestamp with time zone")
@@ -350,6 +425,11 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("closure_notes");
 
+                    b.Property<string>("ClosureRejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("closure_rejection_reason");
+
                     b.Property<DateTimeOffset?>("ClosureRequestedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("closure_requested_at");
@@ -365,6 +445,14 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
+
+                    b.Property<DateTimeOffset?>("EnRouteAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("en_route_at");
+
+                    b.Property<int?>("EstimatedArrivalMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("estimated_arrival_minutes");
 
                     b.Property<string>("ExteriorNumber")
                         .HasMaxLength(30)
@@ -755,6 +843,11 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("avatar_url");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -833,6 +926,59 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "ScheduledPurgeAt");
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.UserNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActionUrl")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)")
+                        .HasColumnName("action_url");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_read");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(140)
+                        .HasColumnType("character varying(140)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("type");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "IsRead", "CreatedAt");
+
+                    b.ToTable("user_notifications", (string)null);
                 });
 
             modelBuilder.Entity("TECNIHUB.Domain.Entities.VerificationCode", b =>
@@ -937,6 +1083,17 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                     b.Navigation("Conversation");
 
                     b.Navigation("SenderUser");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.PushSubscriptionRecord", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TECNIHUB.Domain.Entities.RefreshToken", b =>
@@ -1048,6 +1205,17 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("TECNIHUB.Domain.Entities.UserNotification", b =>
+                {
+                    b.HasOne("TECNIHUB.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TECNIHUB.Domain.Entities.VerificationCode", b =>

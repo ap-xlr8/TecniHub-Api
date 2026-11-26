@@ -33,7 +33,8 @@ public sealed record OpenRepairBoardItemDto(
     string StatusLabel,
     int ImageCount,
     string? ThumbnailUrl,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<string>? ImageUrls = null);
 
 public sealed record ClientRepairSummaryDto(
     Guid Id,
@@ -51,7 +52,8 @@ public sealed record ClientRepairSummaryDto(
     DateTimeOffset? CompletedAt,
     int ImageCount,
     string? ThumbnailUrl,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<string>? ImageUrls = null);
 
 public sealed record ItineraryItemDto(
     Guid Id,
@@ -66,7 +68,10 @@ public sealed record ItineraryItemDto(
     string Status,
     string StatusLabel,
     bool HasScheduleOverlap,
-    DateTimeOffset AssignedAt);
+    DateTimeOffset AssignedAt,
+    int ImageCount = 0,
+    string? ThumbnailUrl = null,
+    IReadOnlyList<string>? ImageUrls = null);
 
 public sealed record RepairDetailDto(
     Guid Id,
@@ -93,7 +98,16 @@ public sealed record RepairDetailDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<ImageItemDto> Images,
-    Guid? ConversationId);
+    Guid? ConversationId,
+    DateTimeOffset? EnRouteAt = null,
+    int? EstimatedArrivalMinutes = null,
+    DateTimeOffset? ArrivedAt = null,
+    string? ClientArrivalPin = null,
+    bool RequiresArrivalPin = false,
+    string? ClosureRejectionReason = null,
+    string? CancellationReason = null,
+    string? AssignedTechnicianAvatarUrl = null,
+    string? ClientAvatarUrl = null);
 
 public sealed record OverlappingAppointmentDto(
     Guid RepairRequestId,
@@ -124,20 +138,34 @@ public sealed record CreateRepairRequestInput(
 
 public sealed record UpdateRepairImagesInput(IReadOnlyList<string> ImageUrls);
 public sealed record ScheduleRepairInput(DateTimeOffset ScheduledStartAt);
+public sealed record MarkOnTheWayInput(int? EstimatedArrivalMinutes);
+public sealed record StartWorkInput(string? ArrivalPinCode);
 public sealed record RequestClosureInput(string? ClosureNotes);
+public sealed record RejectClosureInput(string Reason);
+public sealed record ReleaseRepairInput(string Reason);
+public sealed record CancelRepairInput(string? Reason);
 
 public interface IRepairRequestService
 {
     Task<Result<RepairDetailDto>> CreateAsync(Guid clientUserId, CreateRepairRequestInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<ClientRepairSummaryDto>>> GetClientRequestsAsync(Guid clientUserId, CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<OpenRepairBoardItemDto>>> GetOpenBoardAsync(string? search, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<OpenRepairBoardItemDto>>> GetOpenBoardAsync(
+        string? search,
+        string? state = null,
+        string? municipality = null,
+        string? postalCode = null,
+        CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<ItineraryItemDto>>> GetTechnicianItineraryAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> GetDetailAsync(Guid repairId, Guid actorUserId, UserRole actorRole, CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> UpdateImagesAsync(Guid repairId, Guid clientUserId, UpdateRepairImagesInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> AcceptAsync(Guid repairId, Guid technicianUserId, RequestMetadata metadata, CancellationToken cancellationToken = default);
     Task<Result<ScheduleRepairResponse>> ScheduleAsync(Guid repairId, Guid technicianUserId, ScheduleRepairInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
-    Task<Result<RepairDetailDto>> StartWorkAsync(Guid repairId, Guid technicianUserId, RequestMetadata metadata, CancellationToken cancellationToken = default);
+    Task<Result<RepairDetailDto>> MarkOnTheWayAsync(Guid repairId, Guid technicianUserId, MarkOnTheWayInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
+    Task<Result<RepairDetailDto>> MarkArrivedAsync(Guid repairId, Guid technicianUserId, RequestMetadata metadata, CancellationToken cancellationToken = default);
+    Task<Result<RepairDetailDto>> StartWorkAsync(Guid repairId, Guid technicianUserId, RequestMetadata metadata, StartWorkInput? input = null, CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> RequestClosureAsync(Guid repairId, Guid technicianUserId, RequestClosureInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
+    Task<Result<RepairDetailDto>> RejectClosureAsync(Guid repairId, Guid clientUserId, RejectClosureInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> ConfirmClosureAsync(Guid repairId, Guid clientUserId, RequestMetadata metadata, CancellationToken cancellationToken = default);
-    Task<Result<RepairDetailDto>> CancelAsync(Guid repairId, Guid clientUserId, RequestMetadata metadata, CancellationToken cancellationToken = default);
+    Task<Result<RepairDetailDto>> ReleaseByTechnicianAsync(Guid repairId, Guid technicianUserId, ReleaseRepairInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
+    Task<Result<RepairDetailDto>> CancelAsync(Guid repairId, Guid clientUserId, RequestMetadata metadata, CancelRepairInput? input = null, CancellationToken cancellationToken = default);
 }

@@ -24,6 +24,8 @@ public sealed class TecniHubDbContext : DbContext
     public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<PushSubscriptionRecord> PushSubscriptions => Set<PushSubscriptionRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,6 +61,7 @@ public sealed class TecniHubDbContext : DbContext
             entity.Property(u => u.NormalizedEmail).HasColumnName("normalized_email").HasMaxLength(254).IsRequired();
             entity.Property(u => u.Phone).HasColumnName("phone").HasMaxLength(20);
             entity.Property(u => u.PublicRegion).HasColumnName("public_region").HasMaxLength(120);
+            entity.Property(u => u.AvatarUrl).HasColumnName("avatar_url").HasMaxLength(500);
             entity.Property(u => u.PasswordHash).HasColumnName("password_hash").HasMaxLength(512).IsRequired();
             entity.Property(u => u.IsEmailVerified).HasColumnName("is_email_verified").IsRequired();
             entity.Property(u => u.Status).HasColumnName("status").HasConversion<int>().IsRequired();
@@ -203,11 +206,18 @@ public sealed class TecniHubDbContext : DbContext
             entity.Property(r => r.Status).HasColumnName("status").HasConversion<int>().IsRequired();
             entity.Property(r => r.AssignedAt).HasColumnName("assigned_at");
             entity.Property(r => r.ScheduledStartAt).HasColumnName("scheduled_start_at");
+            entity.Property(r => r.EnRouteAt).HasColumnName("en_route_at");
+            entity.Property(r => r.EstimatedArrivalMinutes).HasColumnName("estimated_arrival_minutes");
+            entity.Property(r => r.ArrivedAt).HasColumnName("arrived_at");
+            entity.Property(r => r.ArrivalPinCode).HasColumnName("arrival_pin_code").HasMaxLength(16);
+            entity.Property(r => r.ArrivalPinFailedAttempts).HasColumnName("arrival_pin_failed_attempts").IsRequired();
             entity.Property(r => r.StartedAt).HasColumnName("started_at");
             entity.Property(r => r.ClosureRequestedAt).HasColumnName("closure_requested_at");
             entity.Property(r => r.ClosureNotes).HasColumnName("closure_notes").HasMaxLength(500);
+            entity.Property(r => r.ClosureRejectionReason).HasColumnName("closure_rejection_reason").HasMaxLength(500);
             entity.Property(r => r.CompletedAt).HasColumnName("completed_at");
             entity.Property(r => r.CancelledAt).HasColumnName("cancelled_at");
+            entity.Property(r => r.CancellationReason).HasColumnName("cancellation_reason").HasMaxLength(300);
             entity.Property(r => r.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.Property(r => r.UpdatedAt).HasColumnName("updated_at").IsRequired();
             entity.Property(r => r.DeletedAt).HasColumnName("deleted_at");
@@ -309,7 +319,7 @@ public sealed class TecniHubDbContext : DbContext
             entity.Property(c => c.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.Property(c => c.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
-            entity.HasIndex(c => c.RepairRequestId)
+            entity.HasIndex(c => new { c.RepairRequestId, c.ParticipantBUserId })
                 .IsUnique()
                 .HasFilter("repair_request_id IS NOT NULL");
 
@@ -349,6 +359,7 @@ public sealed class TecniHubDbContext : DbContext
             entity.Property(m => m.ConversationId).HasColumnName("conversation_id").IsRequired();
             entity.Property(m => m.SenderUserId).HasColumnName("sender_user_id").IsRequired();
             entity.Property(m => m.Body).HasColumnName("body").HasMaxLength(ChatMessage.MaxBodyLength).IsRequired();
+            entity.Property(m => m.ImageUrl).HasColumnName("image_url").HasMaxLength(500);
             entity.Property(m => m.SentAt).HasColumnName("sent_at").IsRequired();
             entity.Property(m => m.ReadAt).HasColumnName("read_at");
 
@@ -396,6 +407,50 @@ public sealed class TecniHubDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(r => r.ClientUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<UserNotification>(entity =>
+        {
+            entity.ToTable("user_notifications");
+            entity.HasKey(n => n.Id);
+            entity.Property(n => n.Id).HasColumnName("id");
+            entity.Property(n => n.UserId).HasColumnName("user_id").IsRequired();
+            entity.Property(n => n.Type).HasColumnName("type").HasMaxLength(64).IsRequired();
+            entity.Property(n => n.Title).HasColumnName("title").HasMaxLength(140).IsRequired();
+            entity.Property(n => n.Body).HasColumnName("body").HasMaxLength(320).IsRequired();
+            entity.Property(n => n.ActionUrl).HasColumnName("action_url").HasMaxLength(250);
+            entity.Property(n => n.IsRead).HasColumnName("is_read").IsRequired();
+            entity.Property(n => n.ReadAt).HasColumnName("read_at");
+            entity.Property(n => n.CreatedAt).HasColumnName("created_at").IsRequired();
+
+            entity.HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
+
+            entity.HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PushSubscriptionRecord>(entity =>
+        {
+            entity.ToTable("push_subscriptions");
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.Id).HasColumnName("id");
+            entity.Property(p => p.UserId).HasColumnName("user_id").IsRequired();
+            entity.Property(p => p.Endpoint).HasColumnName("endpoint").HasMaxLength(2000).IsRequired();
+            entity.Property(p => p.P256dh).HasColumnName("p256dh").HasMaxLength(256).IsRequired();
+            entity.Property(p => p.Auth).HasColumnName("auth").HasMaxLength(128).IsRequired();
+            entity.Property(p => p.UserAgent).HasColumnName("user_agent").HasMaxLength(300);
+            entity.Property(p => p.CreatedAt).HasColumnName("created_at").IsRequired();
+            entity.Property(p => p.UpdatedAt).HasColumnName("updated_at").IsRequired();
+
+            entity.HasIndex(p => p.Endpoint).IsUnique();
+            entity.HasIndex(p => p.UserId);
+
+            entity.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

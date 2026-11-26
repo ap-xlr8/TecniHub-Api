@@ -5,6 +5,7 @@ using TECNIHUB.Application.Abstractions;
 using TECNIHUB.Application.Auth.DTOs;
 using TECNIHUB.Application.Auth.Services;
 using TECNIHUB.Application.Chat;
+using TECNIHUB.Application.Notifications;
 using TECNIHUB.Application.PostalCodes;
 using TECNIHUB.Application.Profile;
 using TECNIHUB.Application.Repairs;
@@ -14,6 +15,7 @@ using TECNIHUB.Infrastructure.Audit;
 using TECNIHUB.Infrastructure.Background;
 using TECNIHUB.Infrastructure.Email;
 using TECNIHUB.Infrastructure.Media;
+using TECNIHUB.Infrastructure.Notifications;
 using TECNIHUB.Infrastructure.Persistence;
 using TECNIHUB.Infrastructure.Security;
 using TECNIHUB.Infrastructure.Time;
@@ -80,6 +82,19 @@ public static class DependencyInjection
             }
         });
 
+        services.Configure<VapidOptions>(options =>
+        {
+            var vapidSection = configuration.GetSection(VapidOptions.SectionName);
+            var fallbackSection = configuration.GetSection("PushNotifications:Vapid");
+            options.PublicKey = vapidSection["PublicKey"] ?? fallbackSection["PublicKey"] ?? string.Empty;
+            options.PrivateKey = vapidSection["PrivateKey"] ?? fallbackSection["PrivateKey"] ?? string.Empty;
+            var subject = vapidSection["Subject"] ?? fallbackSection["Subject"];
+            if (!string.IsNullOrWhiteSpace(subject))
+            {
+                options.Subject = subject;
+            }
+        });
+
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         services.AddDbContext<TecniHubDbContext>(options =>
         {
@@ -112,6 +127,16 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(20);
         });
 
+        services.AddHttpClient<IWebPushDispatcher, WebPushNotificationDispatcher>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false
+        });
+
+        services.AddSingleton<IRealtimeNotifier, NoOpRealtimeNotifier>();
         services.AddScoped<IAuditLogger, AuditLoggerService>();
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<IPostalCodeRepository, PostalCodeRepository>();
@@ -119,10 +144,12 @@ public static class DependencyInjection
         services.AddScoped<ISparePartRepository, SparePartRepository>();
         services.AddScoped<IChatRepository, ChatRepository>();
         services.AddScoped<IServiceReviewRepository, ServiceReviewRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<IPostalCodeService, PostalCodeService>();
+        services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IRepairRequestService, RepairRequestService>();
         services.AddScoped<ISparePartService, SparePartService>();
         services.AddScoped<IChatService, ChatService>();

@@ -45,7 +45,8 @@ public sealed record UserSummaryDto(
     string Role,
     bool IsEmailVerified,
     TechnicianProfileDto? TechnicianProfile,
-    string? PublicRegion = null);
+    string? PublicRegion = null,
+    string? AvatarUrl = null);
 
 public sealed record AuthSessionResult(
     string AccessToken,

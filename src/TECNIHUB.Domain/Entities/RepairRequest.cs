@@ -4,7 +4,8 @@ namespace TECNIHUB.Domain.Entities;
 
 public sealed class RepairRequest
 {
-    public const int MaxImages = 5;
+    public const int MinImages = 1;
+    public const int MaxImages = 6;
 
     public Guid Id { get; set; }
     public Guid ClientUserId { get; set; }
@@ -36,11 +37,18 @@ public sealed class RepairRequest
 
     public DateTimeOffset? AssignedAt { get; set; }
     public DateTimeOffset? ScheduledStartAt { get; set; }
+    public DateTimeOffset? EnRouteAt { get; set; }
+    public int? EstimatedArrivalMinutes { get; set; }
+    public DateTimeOffset? ArrivedAt { get; set; }
+    public string? ArrivalPinCode { get; set; }
+    public int ArrivalPinFailedAttempts { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? ClosureRequestedAt { get; set; }
     public string? ClosureNotes { get; set; }
+    public string? ClosureRejectionReason { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
+    public string? CancellationReason { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
@@ -52,6 +60,8 @@ public sealed class RepairRequest
         AssignedTechnicianId.HasValue
         && Status is RepairRequestStatus.Assigned
             or RepairRequestStatus.Scheduled
+            or RepairRequestStatus.OnTheWay
+            or RepairRequestStatus.Arrived
             or RepairRequestStatus.InProgress
             or RepairRequestStatus.ClosureRequested
             or RepairRequestStatus.Completed;
@@ -92,6 +102,46 @@ public sealed class RepairRequest
         return true;
     }
 
+    public bool MarkOnTheWay(Guid technicianUserId, int? estimatedArrivalMinutes, string arrivalPinCode, DateTimeOffset utcNow)
+    {
+        if (AssignedTechnicianId != technicianUserId)
+        {
+            return false;
+        }
+
+        if (Status is not (RepairRequestStatus.Assigned or RepairRequestStatus.Scheduled or RepairRequestStatus.OnTheWay))
+        {
+            return false;
+        }
+
+        EnRouteAt ??= utcNow;
+        EstimatedArrivalMinutes = estimatedArrivalMinutes;
+        ArrivalPinCode ??= arrivalPinCode;
+        Status = RepairRequestStatus.OnTheWay;
+        UpdatedAt = utcNow;
+        return true;
+    }
+
+    public bool MarkArrived(Guid technicianUserId, string arrivalPinCode, DateTimeOffset utcNow)
+    {
+        if (AssignedTechnicianId != technicianUserId)
+        {
+            return false;
+        }
+
+        if (Status is not (RepairRequestStatus.Assigned or RepairRequestStatus.Scheduled or RepairRequestStatus.OnTheWay))
+        {
+            return false;
+        }
+
+        EnRouteAt ??= utcNow;
+        ArrivedAt = utcNow;
+        ArrivalPinCode ??= arrivalPinCode;
+        Status = RepairRequestStatus.Arrived;
+        UpdatedAt = utcNow;
+        return true;
+    }
+
     public bool StartWork(Guid technicianUserId, DateTimeOffset utcNow)
     {
         if (AssignedTechnicianId != technicianUserId)
@@ -99,15 +149,25 @@ public sealed class RepairRequest
             return false;
         }
 
-        if (Status is not (RepairRequestStatus.Assigned or RepairRequestStatus.Scheduled))
+        if (Status is not (RepairRequestStatus.OnTheWay or RepairRequestStatus.Arrived))
         {
             return false;
         }
 
         StartedAt = utcNow;
+        ArrivalPinCode = null;
+        ArrivalPinFailedAttempts = 0;
+        ClosureRejectionReason = null;
         Status = RepairRequestStatus.InProgress;
         UpdatedAt = utcNow;
         return true;
+    }
+
+    public void RotateArrivalPin(string newPinCode, DateTimeOffset utcNow)
+    {
+        ArrivalPinCode = newPinCode;
+        ArrivalPinFailedAttempts = 0;
+        UpdatedAt = utcNow;
     }
 
     public bool RequestClosure(Guid technicianUserId, string? notes, DateTimeOffset utcNow)
@@ -118,8 +178,23 @@ public sealed class RepairRequest
         }
 
         ClosureNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        ClosureRejectionReason = null;
         ClosureRequestedAt = utcNow;
         Status = RepairRequestStatus.ClosureRequested;
+        UpdatedAt = utcNow;
+        return true;
+    }
+
+    public bool RejectClosure(Guid clientUserId, string reason, DateTimeOffset utcNow)
+    {
+        if (ClientUserId != clientUserId || Status != RepairRequestStatus.ClosureRequested)
+        {
+            return false;
+        }
+
+        ClosureRejectionReason = reason.Trim();
+        ClosureRequestedAt = null;
+        Status = RepairRequestStatus.InProgress;
         UpdatedAt = utcNow;
         return true;
     }
@@ -132,19 +207,48 @@ public sealed class RepairRequest
         }
 
         CompletedAt = utcNow;
+        ArrivalPinCode = null;
         Status = RepairRequestStatus.Completed;
         UpdatedAt = utcNow;
         return true;
     }
 
-    public bool Cancel(DateTimeOffset utcNow)
+    public bool ReleaseByTechnician(Guid technicianUserId, DateTimeOffset utcNow)
     {
-        if (Status != RepairRequestStatus.Open)
+        if (AssignedTechnicianId != technicianUserId)
+        {
+            return false;
+        }
+
+        if (Status is not (RepairRequestStatus.Assigned or RepairRequestStatus.Scheduled or RepairRequestStatus.OnTheWay))
+        {
+            return false;
+        }
+
+        AssignedTechnicianId = null;
+        AssignedAt = null;
+        ScheduledStartAt = null;
+        EnRouteAt = null;
+        EstimatedArrivalMinutes = null;
+        ArrivedAt = null;
+        ArrivalPinCode = null;
+        ArrivalPinFailedAttempts = 0;
+        Status = RepairRequestStatus.Open;
+        UpdatedAt = utcNow;
+        return true;
+    }
+
+    public bool Cancel(DateTimeOffset utcNow, string? reason = null)
+    {
+        if (Status is not (RepairRequestStatus.Open or RepairRequestStatus.Assigned or RepairRequestStatus.Scheduled))
         {
             return false;
         }
 
         CancelledAt = utcNow;
+        CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        ArrivalPinCode = null;
+        ArrivalPinFailedAttempts = 0;
         Status = RepairRequestStatus.Cancelled;
         UpdatedAt = utcNow;
         return true;

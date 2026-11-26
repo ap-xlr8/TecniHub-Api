@@ -59,10 +59,27 @@ public static class RepairRequestEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapPost("/{id:guid}/on-the-way", MarkOnTheWayAsync)
+            .RequireAuthorization("TechnicianOnly")
+            .WithName("MarkRepairOnTheWay")
+            .Produces<RepairDetailDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/{id:guid}/arrived", MarkArrivedAsync)
+            .RequireAuthorization("TechnicianOnly")
+            .WithName("MarkRepairArrived")
+            .Produces<RepairDetailDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
         group.MapPost("/{id:guid}/start", StartWorkAsync)
             .RequireAuthorization("TechnicianOnly")
+            .RequireRateLimiting("AuthRateLimit")
             .WithName("StartRepairRequest")
             .Produces<RepairDetailDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -73,10 +90,26 @@ public static class RepairRequestEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapPost("/{id:guid}/reject-closure", RejectClosureAsync)
+            .RequireAuthorization("ClientOnly")
+            .WithName("RejectRepairClosure")
+            .Produces<RepairDetailDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
         group.MapPost("/{id:guid}/confirm-closure", ConfirmClosureAsync)
             .RequireAuthorization("ClientOnly")
             .WithName("ConfirmRepairClosure")
             .Produces<RepairDetailDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/{id:guid}/release", ReleaseByTechnicianAsync)
+            .RequireAuthorization("TechnicianOnly")
+            .WithName("ReleaseRepairAssignment")
+            .Produces<RepairDetailDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -124,10 +157,13 @@ public static class RepairRequestEndpoints
 
     private static async Task<IResult> GetBoardAsync(
         string? search,
+        string? state,
+        string? municipality,
+        string? postalCode,
         IRepairRequestService service,
         CancellationToken cancellationToken)
     {
-        var result = await service.GetOpenBoardAsync(search, cancellationToken);
+        var result = await service.GetOpenBoardAsync(search, state, municipality, postalCode, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
@@ -210,7 +246,29 @@ public static class RepairRequestEndpoints
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
-    private static async Task<IResult> StartWorkAsync(
+    private static async Task<IResult> MarkOnTheWayAsync(
+        Guid id,
+        MarkOnTheWayInput? input,
+        ClaimsPrincipal user,
+        IRepairRequestService service,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!EndpointHelpers.TryGetUserId(user, out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await service.MarkOnTheWayAsync(
+            id,
+            userId,
+            input ?? new MarkOnTheWayInput(null),
+            EndpointHelpers.BuildMetadata(httpContext),
+            cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
+    }
+
+    private static async Task<IResult> MarkArrivedAsync(
         Guid id,
         ClaimsPrincipal user,
         IRepairRequestService service,
@@ -222,7 +280,24 @@ public static class RepairRequestEndpoints
             return Results.Unauthorized();
         }
 
-        var result = await service.StartWorkAsync(id, userId, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        var result = await service.MarkArrivedAsync(id, userId, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
+    }
+
+    private static async Task<IResult> StartWorkAsync(
+        Guid id,
+        StartWorkInput? input,
+        ClaimsPrincipal user,
+        IRepairRequestService service,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!EndpointHelpers.TryGetUserId(user, out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await service.StartWorkAsync(id, userId, EndpointHelpers.BuildMetadata(httpContext), input, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
@@ -248,6 +323,23 @@ public static class RepairRequestEndpoints
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
+    private static async Task<IResult> RejectClosureAsync(
+        Guid id,
+        RejectClosureInput input,
+        ClaimsPrincipal user,
+        IRepairRequestService service,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!EndpointHelpers.TryGetUserId(user, out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await service.RejectClosureAsync(id, userId, input, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
+    }
+
     private static async Task<IResult> ConfirmClosureAsync(
         Guid id,
         ClaimsPrincipal user,
@@ -264,8 +356,9 @@ public static class RepairRequestEndpoints
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
-    private static async Task<IResult> CancelAsync(
+    private static async Task<IResult> ReleaseByTechnicianAsync(
         Guid id,
+        ReleaseRepairInput input,
         ClaimsPrincipal user,
         IRepairRequestService service,
         HttpContext httpContext,
@@ -276,7 +369,24 @@ public static class RepairRequestEndpoints
             return Results.Unauthorized();
         }
 
-        var result = await service.CancelAsync(id, userId, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        var result = await service.ReleaseByTechnicianAsync(id, userId, input, EndpointHelpers.BuildMetadata(httpContext), cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
+    }
+
+    private static async Task<IResult> CancelAsync(
+        Guid id,
+        CancelRepairInput? input,
+        ClaimsPrincipal user,
+        IRepairRequestService service,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (!EndpointHelpers.TryGetUserId(user, out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await service.CancelAsync(id, userId, EndpointHelpers.BuildMetadata(httpContext), input, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 }

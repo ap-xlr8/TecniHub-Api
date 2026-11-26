@@ -1,5 +1,6 @@
 using TECNIHUB.Application.Abstractions;
 using TECNIHUB.Application.Common;
+using TECNIHUB.Application.Notifications;
 using TECNIHUB.Domain.Entities;
 using TECNIHUB.Domain.Enums;
 
@@ -11,17 +12,20 @@ public sealed class PublicProfileService : IPublicProfileService
     private readonly IRepairRequestRepository _repairs;
     private readonly IAuditLogger _auditLogger;
     private readonly IDateTimeProvider _clock;
+    private readonly INotificationService? _notifications;
 
     public PublicProfileService(
         IServiceReviewRepository reviews,
         IRepairRequestRepository repairs,
         IAuditLogger auditLogger,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        INotificationService? notifications = null)
     {
         _reviews = reviews;
         _repairs = repairs;
         _auditLogger = auditLogger;
         _clock = clock;
+        _notifications = notifications;
     }
 
     public async Task<Result<PublicTechnicianProfileDto>> GetPublicTechnicianProfileAsync(
@@ -56,7 +60,8 @@ public sealed class PublicProfileService : IPublicProfileService
             completedCount,
             reviewCount,
             averageRating,
-            mappedReviews));
+            mappedReviews,
+            technician.AvatarUrl));
     }
 
     public async Task<Result<PublicClientProfileDto>> GetPublicClientProfileAsync(
@@ -102,7 +107,8 @@ public sealed class PublicProfileService : IPublicProfileService
             FormatDisplayName(client),
             client.PublicRegion,
             client.CreatedAt,
-            completedCount));
+            completedCount,
+            client.AvatarUrl));
     }
 
     public async Task<Result<PublicReviewItemDto>> CreateReviewAsync(
@@ -200,6 +206,17 @@ public sealed class PublicProfileService : IPublicProfileService
             ipAddress: metadata.IpAddress,
             userAgent: metadata.UserAgent,
             cancellationToken: cancellationToken);
+
+        if (_notifications is not null)
+        {
+            await _notifications.NotifyAsync(
+                review.TechnicianUserId,
+                "ServiceReviewReceived",
+                "Recibiste una nueva reseña",
+                $"Un cliente calificó tu servicio de {repair.ApplianceName} con {review.Rating} / 5.",
+                $"/perfiles/tecnico/{review.TechnicianUserId}",
+                cancellationToken);
+        }
 
         return Result<PublicReviewItemDto>.Success(new PublicReviewItemDto(
             review.Id,

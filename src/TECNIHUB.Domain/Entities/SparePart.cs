@@ -4,7 +4,8 @@ namespace TECNIHUB.Domain.Entities;
 
 public sealed class SparePart
 {
-    public const int MaxImages = 5;
+    public const int MinImages = 1;
+    public const int MaxImages = 6;
 
     public Guid Id { get; set; }
     public Guid TechnicianUserId { get; set; }
@@ -34,6 +35,13 @@ public sealed class SparePart
     public void SetAvailability(bool isAvailable, DateTimeOffset utcNow)
     {
         IsAvailable = isAvailable;
+        UpdatedAt = utcNow;
+    }
+
+    public void SoftDelete(DateTimeOffset utcNow)
+    {
+        IsAvailable = false;
+        DeletedAt = utcNow;
         UpdatedAt = utcNow;
     }
 }

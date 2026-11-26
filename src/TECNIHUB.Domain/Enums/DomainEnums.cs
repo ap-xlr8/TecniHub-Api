@@ -35,7 +35,9 @@ public enum RepairRequestStatus
     InProgress = 4,
     ClosureRequested = 5,
     Completed = 6,
-    Cancelled = 7
+    Cancelled = 7,
+    OnTheWay = 8,
+    Arrived = 9
 }
 
 public enum SparePartCondition

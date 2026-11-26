@@ -151,6 +151,14 @@ public sealed class AuthRepository : IAuthRepository
         {
             part.SetAvailability(false, utcNow);
         }
+
+        var pushSubs = await _dbContext.PushSubscriptions
+            .Where(s => s.UserId == userId)
+            .ToListAsync(cancellationToken);
+        if (pushSubs.Count > 0)
+        {
+            _dbContext.PushSubscriptions.RemoveRange(pushSubs);
+        }
     }
 
     public async Task AnonymizeUserOperationalPiiAsync(
@@ -187,6 +195,14 @@ public sealed class AuthRepository : IAuthRepository
             part.ContactEmail = null;
             part.ContactNotes = null;
             part.UpdatedAt = utcNow;
+        }
+
+        var pushSubs = await _dbContext.PushSubscriptions
+            .Where(s => s.UserId == userId)
+            .ToListAsync(cancellationToken);
+        if (pushSubs.Count > 0)
+        {
+            _dbContext.PushSubscriptions.RemoveRange(pushSubs);
         }
     }
 

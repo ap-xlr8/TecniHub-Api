@@ -97,6 +97,9 @@ public sealed class SparePartService : ISparePartService
         string? search,
         string? category,
         string? modality,
+        string? condition = null,
+        decimal? minPriceMxn = null,
+        decimal? maxPriceMxn = null,
         CancellationToken cancellationToken = default)
     {
         SparePartModality? parsedModality = null;
@@ -106,7 +109,21 @@ public sealed class SparePartService : ISparePartService
             parsedModality = m;
         }
 
-        var items = await _spareParts.GetAvailableAsync(search, category, parsedModality, cancellationToken);
+        SparePartCondition? parsedCondition = null;
+        if (!string.IsNullOrWhiteSpace(condition)
+            && Enum.TryParse<SparePartCondition>(condition.Trim(), ignoreCase: true, out var c))
+        {
+            parsedCondition = c;
+        }
+
+        var items = await _spareParts.GetAvailableAsync(
+            search,
+            category,
+            parsedModality,
+            parsedCondition,
+            minPriceMxn,
+            maxPriceMxn,
+            cancellationToken);
         return Result<IReadOnlyList<SparePartSummaryDto>>.Success(items.Select(MapSummary).ToArray());
     }
 
@@ -269,6 +286,46 @@ public sealed class SparePartService : ISparePartService
         return Result<SparePartDetailDto>.Success(MapDetail(part, technicianUserId));
     }
 
+    public async Task<Result<bool>> DeleteAsync(
+        Guid sparePartId,
+        Guid technicianUserId,
+        RequestMetadata metadata,
+        CancellationToken cancellationToken = default)
+    {
+        var part = await _spareParts.GetByIdAsync(sparePartId, cancellationToken);
+        if (part is null || part.DeletedAt.HasValue)
+        {
+            return Result<bool>.Failure(new AppError(
+                ErrorType.NotFound,
+                "spare_part_not_found",
+                "Publicación de refacción no encontrada."));
+        }
+
+        if (part.TechnicianUserId != technicianUserId)
+        {
+            return Result<bool>.Failure(new AppError(
+                ErrorType.Forbidden,
+                "spare_part_not_owned",
+                "Solo el técnico oferente puede eliminar esta publicación."));
+        }
+
+        part.SoftDelete(_clock.UtcNow);
+        await _spareParts.SaveChangesAsync(cancellationToken);
+
+        await _auditLogger.LogAsync(
+            action: "SparePartDeleted",
+            entityName: "SparePart",
+            entityId: part.Id.ToString(),
+            outcome: AuditOutcome.Success,
+            actorUserId: technicianUserId,
+            actorRole: nameof(UserRole.Technician),
+            ipAddress: metadata.IpAddress,
+            userAgent: metadata.UserAgent,
+            cancellationToken: cancellationToken);
+
+        return Result<bool>.Success(true);
+    }
+
     private static (List<string> Errors, SparePartCondition Condition, SparePartModality Modality) ValidateInput(UpsertSparePartInput input)
     {
         var errors = new List<string>();
@@ -331,40 +388,47 @@ public sealed class SparePartService : ISparePartService
             errors.Add("Las notas de contacto no deben superar 200 caracteres.");
         }
 
-        if (input.ImageUrls is not null)
+        var normalizedImages = NormalizeImageUrls(input.ImageUrls);
+        if (normalizedImages.Length < SparePart.MinImages)
         {
-            if (input.ImageUrls.Count > SparePart.MaxImages)
-            {
-                errors.Add($"Solo se permiten hasta {SparePart.MaxImages} imágenes por publicación.");
-            }
-            else if (input.ImageUrls.Any(u => !ImageSignatureValidator.IsAllowedHostedImageUrl(u)))
-            {
-                errors.Add("Todas las imágenes deben haberse cargado correctamente en el servicio de almacenamiento permitido.");
-            }
+            errors.Add($"Adjunta al menos {SparePart.MinImages} fotografía de la refacción (máximo {SparePart.MaxImages}).");
+        }
+        else if (normalizedImages.Length > SparePart.MaxImages)
+        {
+            errors.Add($"Solo se permiten hasta {SparePart.MaxImages} imágenes por publicación.");
+        }
+        else if (normalizedImages.Any(u => !ImageSignatureValidator.IsAllowedHostedImageUrl(u)))
+        {
+            errors.Add("Todas las imágenes deben haberse cargado correctamente en el servicio de almacenamiento permitido.");
         }
 
         return (errors, condition, modality);
     }
 
-    private static SparePartSummaryDto MapSummary(SparePart part) => new(
-        part.Id,
-        part.TechnicianUserId,
-        FormatDisplayName(part.TechnicianUser),
-        part.TechnicianUser?.TechnicianProfile?.ServiceZone,
-        part.Title,
-        Summarize(part.Description, 140),
-        part.ApplianceCategory,
-        part.Compatibility,
-        part.Condition.ToString(),
-        GetConditionLabel(part.Condition),
-        part.Modality.ToString(),
-        GetModalityLabel(part.Modality),
-        part.PriceMxn,
-        part.IsAvailable,
-        part.IsAvailable ? "Disponible" : "No disponible",
-        part.Images.Count,
-        part.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).FirstOrDefault(),
-        part.CreatedAt);
+    private static SparePartSummaryDto MapSummary(SparePart part)
+    {
+        var orderedUrls = part.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).ToArray();
+        return new SparePartSummaryDto(
+            part.Id,
+            part.TechnicianUserId,
+            FormatDisplayName(part.TechnicianUser),
+            part.TechnicianUser?.TechnicianProfile?.ServiceZone,
+            part.Title,
+            Summarize(part.Description, 140),
+            part.ApplianceCategory,
+            part.Compatibility,
+            part.Condition.ToString(),
+            GetConditionLabel(part.Condition),
+            part.Modality.ToString(),
+            GetModalityLabel(part.Modality),
+            part.PriceMxn,
+            part.IsAvailable,
+            part.IsAvailable ? "Disponible" : "No disponible",
+            orderedUrls.Length,
+            orderedUrls.FirstOrDefault(),
+            part.CreatedAt,
+            orderedUrls);
+    }
 
     private static SparePartDetailDto MapDetail(SparePart part, Guid actorTechnicianId) => new(
         part.Id,
@@ -389,7 +453,10 @@ public sealed class SparePartService : ISparePartService
         part.CreatedAt,
         part.UpdatedAt,
         part.Images.OrderBy(i => i.DisplayOrder).Select(i => new ImageItemDto(i.Id, i.ImageUrl, i.DisplayOrder)).ToArray(),
-        part.TechnicianUserId == actorTechnicianId);
+        part.TechnicianUserId == actorTechnicianId,
+        part.TechnicianUser is null || part.TechnicianUser.Status is AccountStatus.PendingDeletion or AccountStatus.Anonymized
+            ? null
+            : part.TechnicianUser.AvatarUrl);
 
     private static string GetConditionLabel(SparePartCondition condition) => condition switch
     {
