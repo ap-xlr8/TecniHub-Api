@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using TECNIHUB.Application.Common;
 using TECNIHUB.Application.SpareParts;
 
 namespace TECNIHUB.API.Endpoints;
@@ -13,11 +14,11 @@ public static class SparePartEndpoints
 
         group.MapGet(string.Empty, GetAvailableAsync)
             .WithName("GetAvailableSpareParts")
-            .Produces<IReadOnlyList<SparePartSummaryDto>>(StatusCodes.Status200OK);
+            .Produces<PagedResult<SparePartSummaryDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/mine", GetMineAsync)
             .WithName("GetMySpareParts")
-            .Produces<IReadOnlyList<SparePartSummaryDto>>(StatusCodes.Status200OK);
+            .Produces<PagedResult<SparePartSummaryDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/{id:guid}", GetDetailAsync)
             .WithName("GetSparePartDetail")
@@ -52,20 +53,17 @@ public static class SparePartEndpoints
     }
 
     private static async Task<IResult> GetAvailableAsync(
-        string? search,
-        string? category,
-        string? modality,
-        string? condition,
-        decimal? minPrice,
-        decimal? maxPrice,
+        [AsParameters] SparePartBoardQuery query,
         ISparePartService service,
         CancellationToken cancellationToken)
     {
-        var result = await service.GetAvailableAsync(search, category, modality, condition, minPrice, maxPrice, cancellationToken);
+        var result = await service.GetAvailableAsync(query, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> GetMineAsync(
+        int? page,
+        int? pageSize,
         ClaimsPrincipal user,
         ISparePartService service,
         CancellationToken cancellationToken)
@@ -75,7 +73,7 @@ public static class SparePartEndpoints
             return Results.Unauthorized();
         }
 
-        var result = await service.GetMineAsync(userId, cancellationToken);
+        var result = await service.GetMineAsync(userId, page, pageSize, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 

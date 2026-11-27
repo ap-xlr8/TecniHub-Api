@@ -145,17 +145,32 @@ public sealed record RejectClosureInput(string Reason);
 public sealed record ReleaseRepairInput(string Reason);
 public sealed record CancelRepairInput(string? Reason);
 
+public sealed record OpenRepairBoardQuery(
+    string? Search = null,
+    string? State = null,
+    string? Municipality = null,
+    string? PostalCode = null,
+    int? Page = null,
+    int? PageSize = null);
+
 public interface IRepairRequestService
 {
     Task<Result<RepairDetailDto>> CreateAsync(Guid clientUserId, CreateRepairRequestInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<ClientRepairSummaryDto>>> GetClientRequestsAsync(Guid clientUserId, CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<OpenRepairBoardItemDto>>> GetOpenBoardAsync(
-        string? search,
-        string? state = null,
-        string? municipality = null,
-        string? postalCode = null,
+    Task<Result<PagedResult<ClientRepairSummaryDto>>> GetClientRequestsAsync(
+        Guid clientUserId,
+        string? scope = null,
+        int? page = null,
+        int? pageSize = null,
         CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<ItineraryItemDto>>> GetTechnicianItineraryAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
+    Task<Result<PagedResult<OpenRepairBoardItemDto>>> GetOpenBoardAsync(
+        OpenRepairBoardQuery query,
+        CancellationToken cancellationToken = default);
+    Task<Result<PagedResult<ItineraryItemDto>>> GetTechnicianItineraryAsync(
+        Guid technicianUserId,
+        string? scope = null,
+        int? page = null,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> GetDetailAsync(Guid repairId, Guid actorUserId, UserRole actorRole, CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> UpdateImagesAsync(Guid repairId, Guid clientUserId, UpdateRepairImagesInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
     Task<Result<RepairDetailDto>> AcceptAsync(Guid repairId, Guid technicianUserId, RequestMetadata metadata, CancellationToken cancellationToken = default);

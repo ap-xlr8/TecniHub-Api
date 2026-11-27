@@ -104,6 +104,7 @@ builder.Services.AddRateLimiter(options =>
     }
 
     options.AddPolicy("AuthRateLimit", ctx => CreateFixedWindowPartition(ctx, useUserKey: false, isDev ? 120 : 30));
+    options.AddPolicy("RefreshRateLimit", ctx => CreateFixedWindowPartition(ctx, useUserKey: false, isDev ? 240 : 120));
     options.AddPolicy("MediaUploadRateLimit", ctx => CreateFixedWindowPartition(ctx, useUserKey: true, isDev ? 60 : 20));
     options.AddPolicy("ChatRateLimit", ctx => CreateFixedWindowPartition(ctx, useUserKey: true, isDev ? 120 : 30));
 });

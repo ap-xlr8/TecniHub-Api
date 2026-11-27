@@ -47,6 +47,7 @@ public static class AuthEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapPost("/refresh", RefreshAsync)
+            .RequireRateLimiting("RefreshRateLimit")
             .WithName("RefreshSession")
             .Produces<AuthPublicSessionResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status401Unauthorized);
@@ -68,6 +69,7 @@ public static class AuthEndpoints
 
         group.MapGet("/me", GetCurrentUserAsync)
             .RequireAuthorization()
+            .RequireRateLimiting("RefreshRateLimit")
             .WithName("GetCurrentUser")
             .Produces<UserSummaryDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized);

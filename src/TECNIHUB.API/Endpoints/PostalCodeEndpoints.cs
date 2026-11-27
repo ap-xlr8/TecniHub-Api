@@ -20,9 +20,20 @@ public static class PostalCodeEndpoints
     private static async Task<IResult> LookupAsync(
         string postalCode,
         IPostalCodeService postalCodeService,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var result = await postalCodeService.LookupAsync(postalCode, cancellationToken);
-        return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
+        if (!result.IsSuccess)
+        {
+            return EndpointHelpers.ToProblemResult(result.Error!);
+        }
+
+        if (result.Value?.Found == true)
+        {
+            httpContext.Response.Headers.CacheControl = "private, max-age=86400";
+        }
+
+        return Results.Ok(result.Value);
     }
 }

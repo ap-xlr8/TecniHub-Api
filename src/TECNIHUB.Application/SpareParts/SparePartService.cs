@@ -93,46 +93,72 @@ public sealed class SparePartService : ISparePartService
         return Result<SparePartDetailDto>.Success(MapDetail(loaded, technicianUserId));
     }
 
-    public async Task<Result<IReadOnlyList<SparePartSummaryDto>>> GetAvailableAsync(
-        string? search,
-        string? category,
-        string? modality,
-        string? condition = null,
-        decimal? minPriceMxn = null,
-        decimal? maxPriceMxn = null,
+    public async Task<Result<PagedResult<SparePartSummaryDto>>> GetAvailableAsync(
+        SparePartBoardQuery query,
         CancellationToken cancellationToken = default)
     {
+        var (safePage, safePageSize) = PagedResult<SparePartSummaryDto>.Normalize(
+            query.Page,
+            query.PageSize,
+            PagedResult<SparePartSummaryDto>.DefaultSparePartsPageSize);
+
         SparePartModality? parsedModality = null;
-        if (!string.IsNullOrWhiteSpace(modality)
-            && Enum.TryParse<SparePartModality>(modality.Trim(), ignoreCase: true, out var m))
+        if (!string.IsNullOrWhiteSpace(query.Modality)
+            && Enum.TryParse<SparePartModality>(query.Modality.Trim(), ignoreCase: true, out var m))
         {
             parsedModality = m;
         }
 
         SparePartCondition? parsedCondition = null;
-        if (!string.IsNullOrWhiteSpace(condition)
-            && Enum.TryParse<SparePartCondition>(condition.Trim(), ignoreCase: true, out var c))
+        if (!string.IsNullOrWhiteSpace(query.Condition)
+            && Enum.TryParse<SparePartCondition>(query.Condition.Trim(), ignoreCase: true, out var c))
         {
             parsedCondition = c;
         }
 
-        var items = await _spareParts.GetAvailableAsync(
-            search,
-            category,
-            parsedModality,
-            parsedCondition,
-            minPriceMxn,
-            maxPriceMxn,
+        var (items, totalCount) = await _spareParts.GetAvailablePageAsync(
+            new SparePartBoardFilter(
+                query.Search,
+                query.Category,
+                parsedModality,
+                parsedCondition,
+                query.MinPrice,
+                query.MaxPrice,
+                safePage,
+                safePageSize),
             cancellationToken);
-        return Result<IReadOnlyList<SparePartSummaryDto>>.Success(items.Select(MapSummary).ToArray());
+
+        return Result<PagedResult<SparePartSummaryDto>>.Success(
+            PagedResult<SparePartSummaryDto>.Create(
+                items.Select(MapSummary).ToArray(),
+                safePage,
+                safePageSize,
+                totalCount));
     }
 
-    public async Task<Result<IReadOnlyList<SparePartSummaryDto>>> GetMineAsync(
+    public async Task<Result<PagedResult<SparePartSummaryDto>>> GetMineAsync(
         Guid technicianUserId,
+        int? page = null,
+        int? pageSize = null,
         CancellationToken cancellationToken = default)
     {
-        var items = await _spareParts.GetByTechnicianAsync(technicianUserId, cancellationToken);
-        return Result<IReadOnlyList<SparePartSummaryDto>>.Success(items.Select(MapSummary).ToArray());
+        var (safePage, safePageSize) = PagedResult<SparePartSummaryDto>.Normalize(
+            page,
+            pageSize,
+            PagedResult<SparePartSummaryDto>.DefaultSparePartsPageSize);
+
+        var (items, totalCount) = await _spareParts.GetByTechnicianPageAsync(
+            technicianUserId,
+            safePage,
+            safePageSize,
+            cancellationToken);
+
+        return Result<PagedResult<SparePartSummaryDto>>.Success(
+            PagedResult<SparePartSummaryDto>.Create(
+                items.Select(MapSummary).ToArray(),
+                safePage,
+                safePageSize,
+                totalCount));
     }
 
     public async Task<Result<SparePartDetailDto>> GetDetailAsync(

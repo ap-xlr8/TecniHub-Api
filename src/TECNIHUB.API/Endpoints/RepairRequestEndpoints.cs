@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using TECNIHUB.Application.Common;
 using TECNIHUB.Application.Repairs;
 
 namespace TECNIHUB.API.Endpoints;
@@ -20,17 +21,17 @@ public static class RepairRequestEndpoints
         group.MapGet("/mine", GetMineAsync)
             .RequireAuthorization("ClientOnly")
             .WithName("GetMyRepairRequests")
-            .Produces<IReadOnlyList<ClientRepairSummaryDto>>(StatusCodes.Status200OK);
+            .Produces<PagedResult<ClientRepairSummaryDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/board", GetBoardAsync)
             .RequireAuthorization("TechnicianOnly")
             .WithName("GetOpenRepairBoard")
-            .Produces<IReadOnlyList<OpenRepairBoardItemDto>>(StatusCodes.Status200OK);
+            .Produces<PagedResult<OpenRepairBoardItemDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/itinerary", GetItineraryAsync)
             .RequireAuthorization("TechnicianOnly")
             .WithName("GetTechnicianItinerary")
-            .Produces<IReadOnlyList<ItineraryItemDto>>(StatusCodes.Status200OK);
+            .Produces<PagedResult<ItineraryItemDto>>(StatusCodes.Status200OK);
 
         group.MapGet("/{id:guid}", GetDetailAsync)
             .WithName("GetRepairRequestDetail")
@@ -142,6 +143,9 @@ public static class RepairRequestEndpoints
     }
 
     private static async Task<IResult> GetMineAsync(
+        string? scope,
+        int? page,
+        int? pageSize,
         ClaimsPrincipal user,
         IRepairRequestService service,
         CancellationToken cancellationToken)
@@ -151,23 +155,23 @@ public static class RepairRequestEndpoints
             return Results.Unauthorized();
         }
 
-        var result = await service.GetClientRequestsAsync(userId, cancellationToken);
+        var result = await service.GetClientRequestsAsync(userId, scope, page, pageSize, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> GetBoardAsync(
-        string? search,
-        string? state,
-        string? municipality,
-        string? postalCode,
+        [AsParameters] OpenRepairBoardQuery query,
         IRepairRequestService service,
         CancellationToken cancellationToken)
     {
-        var result = await service.GetOpenBoardAsync(search, state, municipality, postalCode, cancellationToken);
+        var result = await service.GetOpenBoardAsync(query, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 
     private static async Task<IResult> GetItineraryAsync(
+        string? scope,
+        int? page,
+        int? pageSize,
         ClaimsPrincipal user,
         IRepairRequestService service,
         CancellationToken cancellationToken)
@@ -177,7 +181,7 @@ public static class RepairRequestEndpoints
             return Results.Unauthorized();
         }
 
-        var result = await service.GetTechnicianItineraryAsync(userId, cancellationToken);
+        var result = await service.GetTechnicianItineraryAsync(userId, scope, page, pageSize, cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : EndpointHelpers.ToProblemResult(result.Error!);
     }
 

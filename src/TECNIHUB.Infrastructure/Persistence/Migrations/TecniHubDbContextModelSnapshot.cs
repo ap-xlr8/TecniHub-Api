@@ -244,7 +244,10 @@ namespace TECNIHUB.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PostalCode");
+                    b.HasIndex("PostalCode", "Neighborhood")
+                        .HasDatabaseName("ix_postal_codes_postal_code_neighborhood");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("PostalCode", "Neighborhood"), new[] { "State", "Municipality", "City" });
 
                     b.ToTable("postal_codes", (string)null);
                 });

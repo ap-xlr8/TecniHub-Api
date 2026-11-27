@@ -105,6 +105,7 @@ public static class DependencyInjection
             }
         });
 
+        services.AddMemoryCache();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>();
