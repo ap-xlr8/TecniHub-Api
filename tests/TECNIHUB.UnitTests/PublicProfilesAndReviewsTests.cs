@@ -225,7 +225,7 @@ public sealed class PublicProfilesAndReviewsTests
         public Task AddAsync(RepairRequest request, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<RepairRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Items.FirstOrDefault(r => r.Id == id));
         public Task<IReadOnlyList<RepairRequest>> GetByClientAsync(Guid clientUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>([]);
-        public Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(string? search, string? state = null, string? municipality = null, string? postalCode = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>([]);
+        public Task<(IReadOnlyList<RepairRequest> Items, int TotalCount)> GetOpenBoardPageAsync(OpenRepairBoardFilter filter, CancellationToken cancellationToken = default) => Task.FromResult<(IReadOnlyList<RepairRequest>, int)>(([], 0));
         public Task<IReadOnlyList<RepairRequest>> GetByAssignedTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>([]);
         public Task<bool> TryAcceptAtomicAsync(Guid repairRequestId, Guid technicianUserId, DateTimeOffset utcNow, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task ReplaceImagesAsync(Guid repairRequestId, IReadOnlyList<RepairRequestImage> newImages, DateTimeOffset utcNow, CancellationToken cancellationToken = default) => Task.CompletedTask;

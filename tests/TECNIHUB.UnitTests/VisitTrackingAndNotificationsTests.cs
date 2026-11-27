@@ -136,7 +136,7 @@ public sealed class VisitTrackingAndNotificationsTests
 
         var ownerDelete = await spSut.DeleteAsync(part.Value.Id, techId, _meta);
         Assert.True(ownerDelete.IsSuccess);
-        Assert.Empty((await spSut.GetAvailableAsync(null, null, null)).Value!);
+        Assert.Empty((await spSut.GetAvailableAsync(new SparePartBoardQuery())).Value!.Items);
     }
 
     [Fact]
@@ -242,7 +242,11 @@ public sealed class VisitTrackingAndNotificationsTests
         public Task AddAsync(RepairRequest request, CancellationToken cancellationToken = default) { Items.Add(request); return Task.CompletedTask; }
         public Task<RepairRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Items.FirstOrDefault(r => r.Id == id));
         public Task<IReadOnlyList<RepairRequest>> GetByClientAsync(Guid clientUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.ClientUserId == clientUserId).ToList());
-        public Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(string? search, string? state = null, string? municipality = null, string? postalCode = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.Status == RepairRequestStatus.Open).ToList());
+        public Task<(IReadOnlyList<RepairRequest> Items, int TotalCount)> GetOpenBoardPageAsync(OpenRepairBoardFilter filter, CancellationToken cancellationToken = default)
+        {
+            var all = Items.Where(r => r.Status == RepairRequestStatus.Open).ToList();
+            return Task.FromResult<(IReadOnlyList<RepairRequest>, int)>((all.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToList(), all.Count));
+        }
         public Task<IReadOnlyList<RepairRequest>> GetByAssignedTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.AssignedTechnicianId == technicianUserId).ToList());
         public Task<bool> TryAcceptAtomicAsync(Guid repairRequestId, Guid technicianUserId, DateTimeOffset utcNow, CancellationToken cancellationToken = default)
         {
@@ -258,9 +262,16 @@ public sealed class VisitTrackingAndNotificationsTests
         public List<SparePart> Items { get; } = [];
         public Task AddAsync(SparePart sparePart, CancellationToken cancellationToken = default) { Items.Add(sparePart); return Task.CompletedTask; }
         public Task<SparePart?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Items.FirstOrDefault(p => p.Id == id));
-        public Task<IReadOnlyList<SparePart>> GetAvailableAsync(string? search, string? category, SparePartModality? modality, SparePartCondition? condition = null, decimal? minPriceMxn = null, decimal? maxPriceMxn = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<SparePart>>(Items.Where(p => p.IsAvailable && p.DeletedAt == null).ToList());
-        public Task<IReadOnlyList<SparePart>> GetByTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<SparePart>>(Items.Where(p => p.TechnicianUserId == technicianUserId && p.DeletedAt == null).ToList());
+        public Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetAvailablePageAsync(SparePartBoardFilter filter, CancellationToken cancellationToken = default)
+        {
+            var all = Items.Where(p => p.IsAvailable && p.DeletedAt == null).ToList();
+            return Task.FromResult<(IReadOnlyList<SparePart>, int)>((all.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToList(), all.Count));
+        }
+        public Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetByTechnicianPageAsync(Guid technicianUserId, int page, int pageSize, CancellationToken cancellationToken = default)
+        {
+            var all = Items.Where(p => p.TechnicianUserId == technicianUserId && p.DeletedAt == null).ToList();
+            return Task.FromResult<(IReadOnlyList<SparePart>, int)>((all.Skip((page - 1) * pageSize).Take(pageSize).ToList(), all.Count));
+        }
         public Task ReplaceImagesAsync(Guid sparePartId, IReadOnlyList<SparePartImage> newImages, DateTimeOffset utcNow, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }

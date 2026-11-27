@@ -22,16 +22,31 @@ public interface IImageStorageService
         CancellationToken cancellationToken = default);
 }
 
+public sealed record OpenRepairBoardFilter(
+    string? Search = null,
+    string? State = null,
+    string? Municipality = null,
+    string? PostalCode = null,
+    int Page = 1,
+    int PageSize = PagedResult<object>.DefaultBoardPageSize);
+
+public sealed record SparePartBoardFilter(
+    string? Search = null,
+    string? Category = null,
+    SparePartModality? Modality = null,
+    SparePartCondition? Condition = null,
+    decimal? MinPriceMxn = null,
+    decimal? MaxPriceMxn = null,
+    int Page = 1,
+    int PageSize = PagedResult<object>.DefaultSparePartsPageSize);
+
 public interface IRepairRequestRepository
 {
     Task AddAsync(RepairRequest request, CancellationToken cancellationToken = default);
     Task<RepairRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RepairRequest>> GetByClientAsync(Guid clientUserId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(
-        string? search,
-        string? state = null,
-        string? municipality = null,
-        string? postalCode = null,
+    Task<(IReadOnlyList<RepairRequest> Items, int TotalCount)> GetOpenBoardPageAsync(
+        OpenRepairBoardFilter filter,
         CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RepairRequest>> GetByAssignedTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
     Task<bool> TryAcceptAtomicAsync(Guid repairRequestId, Guid technicianUserId, DateTimeOffset utcNow, CancellationToken cancellationToken = default);
@@ -44,15 +59,14 @@ public interface ISparePartRepository
 {
     Task AddAsync(SparePart sparePart, CancellationToken cancellationToken = default);
     Task<SparePart?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<SparePart>> GetAvailableAsync(
-        string? search,
-        string? category,
-        SparePartModality? modality,
-        SparePartCondition? condition = null,
-        decimal? minPriceMxn = null,
-        decimal? maxPriceMxn = null,
+    Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetAvailablePageAsync(
+        SparePartBoardFilter filter,
         CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<SparePart>> GetByTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetByTechnicianPageAsync(
+        Guid technicianUserId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
     Task ReplaceImagesAsync(Guid sparePartId, IReadOnlyList<SparePartImage> newImages, DateTimeOffset utcNow, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

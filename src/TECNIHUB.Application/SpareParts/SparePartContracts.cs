@@ -65,18 +65,27 @@ public sealed record UpsertSparePartInput(
 
 public sealed record SetSparePartAvailabilityInput(bool IsAvailable);
 
+public sealed record SparePartBoardQuery(
+    string? Search = null,
+    string? Category = null,
+    string? Modality = null,
+    string? Condition = null,
+    decimal? MinPrice = null,
+    decimal? MaxPrice = null,
+    int? Page = null,
+    int? PageSize = null);
+
 public interface ISparePartService
 {
     Task<Result<SparePartDetailDto>> CreateAsync(Guid technicianUserId, UpsertSparePartInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<SparePartSummaryDto>>> GetAvailableAsync(
-        string? search,
-        string? category,
-        string? modality,
-        string? condition = null,
-        decimal? minPriceMxn = null,
-        decimal? maxPriceMxn = null,
+    Task<Result<PagedResult<SparePartSummaryDto>>> GetAvailableAsync(
+        SparePartBoardQuery query,
         CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<SparePartSummaryDto>>> GetMineAsync(Guid technicianUserId, CancellationToken cancellationToken = default);
+    Task<Result<PagedResult<SparePartSummaryDto>>> GetMineAsync(
+        Guid technicianUserId,
+        int? page = null,
+        int? pageSize = null,
+        CancellationToken cancellationToken = default);
     Task<Result<SparePartDetailDto>> GetDetailAsync(Guid sparePartId, Guid actorTechnicianId, CancellationToken cancellationToken = default);
     Task<Result<SparePartDetailDto>> UpdateAsync(Guid sparePartId, Guid technicianUserId, UpsertSparePartInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);
     Task<Result<SparePartDetailDto>> SetAvailabilityAsync(Guid sparePartId, Guid technicianUserId, SetSparePartAvailabilityInput input, RequestMetadata metadata, CancellationToken cancellationToken = default);

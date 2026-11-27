@@ -216,8 +216,8 @@ public sealed class CoreOperationsServiceTests
         Assert.True(created.IsSuccess);
         Assert.Equal(450m, created.Value!.PriceMxn);
 
-        var boardBefore = await sut.GetAvailableAsync(null, null, null);
-        Assert.Single(boardBefore.Value!);
+        var boardBefore = await sut.GetAvailableAsync(new SparePartBoardQuery());
+        Assert.Single(boardBefore.Value!.Items);
 
         var hideByOther = await sut.SetAvailabilityAsync(created.Value.Id, otherTech, new SetSparePartAvailabilityInput(false), _meta);
         Assert.False(hideByOther.IsSuccess);
@@ -226,8 +226,70 @@ public sealed class CoreOperationsServiceTests
         var hideByOwner = await sut.SetAvailabilityAsync(created.Value.Id, techOwner, new SetSparePartAvailabilityInput(false), _meta);
         Assert.True(hideByOwner.IsSuccess);
 
-        var boardAfter = await sut.GetAvailableAsync(null, null, null);
-        Assert.Empty(boardAfter.Value!);
+        var boardAfter = await sut.GetAvailableAsync(new SparePartBoardQuery());
+        Assert.Empty(boardAfter.Value!.Items);
+    }
+
+    [Fact]
+    public async Task Pagination_slices_client_board_itinerary_and_spare_parts_and_clamps_page_size()
+    {
+        var clientId = Guid.NewGuid();
+        var techId = Guid.NewGuid();
+        var repairsRepo = new InMemoryRepairRepo();
+        var spareRepo = new InMemorySparePartRepo();
+        var chatRepo = new InMemoryChatRepo(repairsRepo, spareRepo);
+        var repairSut = new RepairRequestService(repairsRepo, chatRepo, _audit, _clock);
+        var spareSut = new SparePartService(spareRepo, _audit, _clock);
+
+        // Create 15 repairs (client pageSize=12 -> 2 pages: 12 + 3)
+        for (var i = 0; i < 15; i++)
+        {
+            var created = await repairSut.CreateAsync(clientId, BuildRepairInput(null), _meta);
+            Assert.True(created.IsSuccess);
+            if (i < 13)
+            {
+                await repairSut.AcceptAsync(created.Value!.Id, techId, _meta);
+            }
+        }
+
+        var clientPage1 = await repairSut.GetClientRequestsAsync(clientId, scope: "active", page: 1, pageSize: 12);
+        Assert.True(clientPage1.IsSuccess);
+        Assert.Equal(12, clientPage1.Value!.Items.Count);
+        Assert.Equal(15, clientPage1.Value.TotalCount);
+        Assert.Equal(2, clientPage1.Value.TotalPages);
+        Assert.Equal(15, clientPage1.Value.ActiveCount);
+
+        var clientPage2 = await repairSut.GetClientRequestsAsync(clientId, scope: "active", page: 2, pageSize: 12);
+        Assert.Equal(3, clientPage2.Value!.Items.Count);
+        Assert.Equal(2, clientPage2.Value.Page);
+
+        // Itinerary has 13 accepted -> 12 + 1
+        var itinPage1 = await repairSut.GetTechnicianItineraryAsync(techId, scope: "active", page: 1, pageSize: 12);
+        Assert.Equal(12, itinPage1.Value!.Items.Count);
+        Assert.Equal(13, itinPage1.Value.TotalCount);
+        var itinPage2 = await repairSut.GetTechnicianItineraryAsync(techId, scope: "active", page: 2, pageSize: 12);
+        Assert.Single(itinPage2.Value!.Items);
+
+        // Open board clamps pageSize > MaxPageSize (50)
+        var openBoard = await repairSut.GetOpenBoardAsync(new OpenRepairBoardQuery(Page: 1, PageSize: 999));
+        Assert.Equal(PagedResult<OpenRepairBoardItemDto>.MaxPageSize, openBoard.Value!.PageSize);
+        Assert.Equal(2, openBoard.Value.TotalCount);
+
+        // Spare parts pagination
+        for (var i = 0; i < 32; i++)
+        {
+            await spareSut.CreateAsync(techId, new UpsertSparePartInput(
+                $"Pieza #{i + 1}", "Descripción suficientemente larga para prueba de paginación.", "Lavado",
+                null, "New", "Sale", 100m + i, "7731112233", null, null, ["https://i.ibb.co/1/p.webp"]), _meta);
+        }
+
+        var spPage1 = await spareSut.GetAvailableAsync(new SparePartBoardQuery(Page: 1, PageSize: 30));
+        Assert.Equal(30, spPage1.Value!.Items.Count);
+        Assert.Equal(32, spPage1.Value.TotalCount);
+        Assert.Equal(2, spPage1.Value.TotalPages);
+
+        var spPage2 = await spareSut.GetAvailableAsync(new SparePartBoardQuery(Page: 2, PageSize: 30));
+        Assert.Equal(2, spPage2.Value!.Items.Count);
     }
 
     [Fact]
@@ -339,7 +401,12 @@ public sealed class CoreOperationsServiceTests
         public Task AddAsync(RepairRequest request, CancellationToken cancellationToken = default) { Items.Add(request); return Task.CompletedTask; }
         public Task<RepairRequest?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Items.FirstOrDefault(r => r.Id == id));
         public Task<IReadOnlyList<RepairRequest>> GetByClientAsync(Guid clientUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.ClientUserId == clientUserId).ToList());
-        public Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(string? search, string? state = null, string? municipality = null, string? postalCode = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.Status == RepairRequestStatus.Open).ToList());
+        public Task<(IReadOnlyList<RepairRequest> Items, int TotalCount)> GetOpenBoardPageAsync(OpenRepairBoardFilter filter, CancellationToken cancellationToken = default)
+        {
+            var all = Items.Where(r => r.Status == RepairRequestStatus.Open).ToList();
+            var pageItems = all.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToList();
+            return Task.FromResult<(IReadOnlyList<RepairRequest>, int)>((pageItems, all.Count));
+        }
         public Task<IReadOnlyList<RepairRequest>> GetByAssignedTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<RepairRequest>>(Items.Where(r => r.AssignedTechnicianId == technicianUserId).ToList());
         public Task<bool> TryAcceptAtomicAsync(Guid repairRequestId, Guid technicianUserId, DateTimeOffset utcNow, CancellationToken cancellationToken = default)
         {
@@ -360,8 +427,18 @@ public sealed class CoreOperationsServiceTests
         public List<SparePart> Items { get; } = [];
         public Task AddAsync(SparePart sparePart, CancellationToken cancellationToken = default) { Items.Add(sparePart); return Task.CompletedTask; }
         public Task<SparePart?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Items.FirstOrDefault(p => p.Id == id));
-        public Task<IReadOnlyList<SparePart>> GetAvailableAsync(string? search, string? category, SparePartModality? modality, SparePartCondition? condition = null, decimal? minPriceMxn = null, decimal? maxPriceMxn = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<SparePart>>(Items.Where(p => p.IsAvailable && p.DeletedAt == null).ToList());
-        public Task<IReadOnlyList<SparePart>> GetByTechnicianAsync(Guid technicianUserId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<SparePart>>(Items.Where(p => p.TechnicianUserId == technicianUserId).ToList());
+        public Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetAvailablePageAsync(SparePartBoardFilter filter, CancellationToken cancellationToken = default)
+        {
+            var all = Items.Where(p => p.IsAvailable && p.DeletedAt == null).ToList();
+            var pageItems = all.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToList();
+            return Task.FromResult<(IReadOnlyList<SparePart>, int)>((pageItems, all.Count));
+        }
+        public Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetByTechnicianPageAsync(Guid technicianUserId, int page, int pageSize, CancellationToken cancellationToken = default)
+        {
+            var all = Items.Where(p => p.TechnicianUserId == technicianUserId && p.DeletedAt == null).ToList();
+            var pageItems = all.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            return Task.FromResult<(IReadOnlyList<SparePart>, int)>((pageItems, all.Count));
+        }
         public Task ReplaceImagesAsync(Guid sparePartId, IReadOnlyList<SparePartImage> newImages, DateTimeOffset utcNow, CancellationToken cancellationToken = default)
         {
             var p = Items.FirstOrDefault(x => x.Id == sparePartId);

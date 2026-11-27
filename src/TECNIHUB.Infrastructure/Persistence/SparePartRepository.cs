@@ -24,28 +24,20 @@ public sealed class SparePartRepository : ISparePartRepository
             .Include(p => p.Images)
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
-    public async Task<IReadOnlyList<SparePart>> GetAvailableAsync(
-        string? search,
-        string? category,
-        SparePartModality? modality,
-        SparePartCondition? condition = null,
-        decimal? minPriceMxn = null,
-        decimal? maxPriceMxn = null,
+    public async Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetAvailablePageAsync(
+        SparePartBoardFilter filter,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.SpareParts
             .AsNoTracking()
-            .Include(p => p.TechnicianUser)
-                .ThenInclude(u => u!.TechnicianProfile)
-            .Include(p => p.Images)
             .Where(p => p.IsAvailable
                 && p.DeletedAt == null
                 && p.TechnicianUser != null
                 && p.TechnicianUser.Status == AccountStatus.Active);
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var term = search.Trim().ToLowerInvariant();
+            var term = filter.Search.Trim().ToLowerInvariant();
             query = query.Where(p =>
                 p.Title.ToLower().Contains(term)
                 || p.Description.ToLower().Contains(term)
@@ -53,49 +45,74 @@ public sealed class SparePartRepository : ISparePartRepository
                 || (p.Compatibility != null && p.Compatibility.ToLower().Contains(term)));
         }
 
-        if (!string.IsNullOrWhiteSpace(category))
+        if (!string.IsNullOrWhiteSpace(filter.Category))
         {
-            var cat = category.Trim().ToLowerInvariant();
+            var cat = filter.Category.Trim().ToLowerInvariant();
             query = query.Where(p => p.ApplianceCategory.ToLower() == cat);
         }
 
-        if (modality.HasValue)
+        if (filter.Modality.HasValue)
         {
-            query = query.Where(p => p.Modality == modality.Value);
+            query = query.Where(p => p.Modality == filter.Modality.Value);
         }
 
-        if (condition.HasValue)
+        if (filter.Condition.HasValue)
         {
-            query = query.Where(p => p.Condition == condition.Value);
+            query = query.Where(p => p.Condition == filter.Condition.Value);
         }
 
-        if (minPriceMxn.HasValue)
+        if (filter.MinPriceMxn.HasValue)
         {
-            query = query.Where(p => p.PriceMxn >= minPriceMxn.Value);
+            query = query.Where(p => p.PriceMxn >= filter.MinPriceMxn.Value);
         }
 
-        if (maxPriceMxn.HasValue)
+        if (filter.MaxPriceMxn.HasValue)
         {
-            query = query.Where(p => p.PriceMxn <= maxPriceMxn.Value);
+            query = query.Where(p => p.PriceMxn <= filter.MaxPriceMxn.Value);
         }
 
-        return await query
-            .OrderByDescending(p => p.CreatedAt)
-            .Take(100)
-            .ToListAsync(cancellationToken);
+        return await ExecutePagedSparePartsAsync(query, filter.Page, filter.PageSize, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<SparePart>> GetByTechnicianAsync(
+    public Task<(IReadOnlyList<SparePart> Items, int TotalCount)> GetByTechnicianPageAsync(
         Guid technicianUserId,
-        CancellationToken cancellationToken = default) =>
-        await _dbContext.SpareParts
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.SpareParts
             .AsNoTracking()
+            .Where(p => p.TechnicianUserId == technicianUserId && p.DeletedAt == null);
+
+        return ExecutePagedSparePartsAsync(query, page, pageSize, cancellationToken);
+    }
+
+    private async Task<(IReadOnlyList<SparePart> Items, int TotalCount)> ExecutePagedSparePartsAsync(
+        IQueryable<SparePart> query,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var totalCount = await query.CountAsync(cancellationToken);
+        var totalPages = totalCount == 0 ? 1 : (int)Math.Ceiling(totalCount / (double)pageSize);
+        var effectivePage = Math.Min(Math.Max(page, 1), totalPages);
+
+        var itemsQuery = query
             .Include(p => p.TechnicianUser)
                 .ThenInclude(u => u!.TechnicianProfile)
             .Include(p => p.Images)
-            .Where(p => p.TechnicianUserId == technicianUserId && p.DeletedAt == null)
             .OrderByDescending(p => p.CreatedAt)
-            .ToListAsync(cancellationToken);
+            .Skip((effectivePage - 1) * pageSize)
+            .Take(pageSize);
+
+        if (_dbContext.Database.IsRelational())
+        {
+            itemsQuery = itemsQuery.AsSplitQuery();
+        }
+
+        var items = await itemsQuery.ToListAsync(cancellationToken);
+        return (items, totalCount);
+    }
 
     public async Task ReplaceImagesAsync(
         Guid sparePartId,

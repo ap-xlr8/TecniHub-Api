@@ -105,45 +105,86 @@ public sealed class RepairRequestService : IRepairRequestService
         return Result<RepairDetailDto>.Success(MapDetail(loaded, clientUserId, conversationId: null));
     }
 
-    public async Task<Result<IReadOnlyList<ClientRepairSummaryDto>>> GetClientRequestsAsync(
+    public async Task<Result<PagedResult<ClientRepairSummaryDto>>> GetClientRequestsAsync(
         Guid clientUserId,
+        string? scope = null,
+        int? page = null,
+        int? pageSize = null,
         CancellationToken cancellationToken = default)
     {
-        var items = await _repairs.GetByClientAsync(clientUserId, cancellationToken);
-        var mapped = items.Select(r =>
-        {
-            var orderedUrls = r.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).ToArray();
-            return new ClientRepairSummaryDto(
-                r.Id,
-                r.ApplianceName,
-                r.BrandModel,
-                Summarize(r.IssueDescription, 140),
-                r.PreferredDate,
-                r.PreferredTimeSlot,
-                MapPublicLocation(r),
-                r.Status.ToString(),
-                GetStatusLabel(r.Status),
-                FormatDisplayName(r.AssignedTechnician),
-                r.ScheduledStartAt,
-                r.ClosureRequestedAt,
-                r.CompletedAt,
-                orderedUrls.Length,
-                orderedUrls.FirstOrDefault(),
-                r.CreatedAt,
-                orderedUrls);
-        }).ToArray();
+        var (safePage, safePageSize) = PagedResult<ClientRepairSummaryDto>.Normalize(
+            page,
+            pageSize,
+            PagedResult<ClientRepairSummaryDto>.DefaultClientPageSize);
 
-        return Result<IReadOnlyList<ClientRepairSummaryDto>>.Success(mapped);
+        var items = await _repairs.GetByClientAsync(clientUserId, cancellationToken);
+        var active = items.Where(r => r.Status is not (RepairRequestStatus.Completed or RepairRequestStatus.Cancelled)).ToList();
+        var history = items.Where(r => r.Status is RepairRequestStatus.Completed or RepairRequestStatus.Cancelled).ToList();
+        var pendingClosureCount = items.Count(r => r.Status == RepairRequestStatus.ClosureRequested);
+
+        var normalizedScope = scope?.Trim().ToLowerInvariant();
+        IReadOnlyList<RepairRequest> filtered = normalizedScope switch
+        {
+            "active" => active,
+            "history" => history,
+            _ => items
+        };
+
+        var totalCount = filtered.Count;
+        var totalPages = totalCount == 0 ? 1 : (int)Math.Ceiling(totalCount / (double)safePageSize);
+        var effectivePage = Math.Min(safePage, totalPages);
+
+        var mapped = filtered
+            .Skip((effectivePage - 1) * safePageSize)
+            .Take(safePageSize)
+            .Select(r =>
+            {
+                var orderedUrls = r.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).ToArray();
+                return new ClientRepairSummaryDto(
+                    r.Id,
+                    r.ApplianceName,
+                    r.BrandModel,
+                    Summarize(r.IssueDescription, 140),
+                    r.PreferredDate,
+                    r.PreferredTimeSlot,
+                    MapPublicLocation(r),
+                    r.Status.ToString(),
+                    GetStatusLabel(r.Status),
+                    FormatDisplayName(r.AssignedTechnician),
+                    r.ScheduledStartAt,
+                    r.ClosureRequestedAt,
+                    r.CompletedAt,
+                    orderedUrls.Length,
+                    orderedUrls.FirstOrDefault(),
+                    r.CreatedAt,
+                    orderedUrls);
+            })
+            .ToArray();
+
+        return Result<PagedResult<ClientRepairSummaryDto>>.Success(
+            PagedResult<ClientRepairSummaryDto>.Create(
+                mapped,
+                effectivePage,
+                safePageSize,
+                totalCount,
+                activeCount: active.Count,
+                secondaryCount: history.Count,
+                pendingClosureCount: pendingClosureCount));
     }
 
-    public async Task<Result<IReadOnlyList<OpenRepairBoardItemDto>>> GetOpenBoardAsync(
-        string? search,
-        string? state = null,
-        string? municipality = null,
-        string? postalCode = null,
+    public async Task<Result<PagedResult<OpenRepairBoardItemDto>>> GetOpenBoardAsync(
+        OpenRepairBoardQuery query,
         CancellationToken cancellationToken = default)
     {
-        var items = await _repairs.GetOpenBoardAsync(search, state, municipality, postalCode, cancellationToken);
+        var (safePage, safePageSize) = PagedResult<OpenRepairBoardItemDto>.Normalize(
+            query.Page,
+            query.PageSize,
+            PagedResult<OpenRepairBoardItemDto>.DefaultBoardPageSize);
+
+        var (items, totalCount) = await _repairs.GetOpenBoardPageAsync(
+            new OpenRepairBoardFilter(query.Search, query.State, query.Municipality, query.PostalCode, safePage, safePageSize),
+            cancellationToken);
+
         // Never project street/numbers or client PII onto the open board DTO.
         var mapped = items.Select(r =>
         {
@@ -164,13 +205,22 @@ public sealed class RepairRequestService : IRepairRequestService
                 orderedUrls);
         }).ToArray();
 
-        return Result<IReadOnlyList<OpenRepairBoardItemDto>>.Success(mapped);
+        return Result<PagedResult<OpenRepairBoardItemDto>>.Success(
+            PagedResult<OpenRepairBoardItemDto>.Create(mapped, safePage, safePageSize, totalCount));
     }
 
-    public async Task<Result<IReadOnlyList<ItineraryItemDto>>> GetTechnicianItineraryAsync(
+    public async Task<Result<PagedResult<ItineraryItemDto>>> GetTechnicianItineraryAsync(
         Guid technicianUserId,
+        string? scope = null,
+        int? page = null,
+        int? pageSize = null,
         CancellationToken cancellationToken = default)
     {
+        var (safePage, safePageSize) = PagedResult<ItineraryItemDto>.Normalize(
+            page,
+            pageSize,
+            PagedResult<ItineraryItemDto>.DefaultItineraryPageSize);
+
         var items = await _repairs.GetByAssignedTechnicianAsync(technicianUserId, cancellationToken);
         var activeScheduled = items
             .Where(r => r.ScheduledStartAt.HasValue
@@ -187,6 +237,26 @@ public sealed class RepairRequestService : IRepairRequestService
             .OrderBy(r => r.Status is RepairRequestStatus.Completed or RepairRequestStatus.Cancelled ? 2 : r.ScheduledStartAt.HasValue ? 0 : 1)
             .ThenBy(r => r.ScheduledStartAt ?? DateTimeOffset.MaxValue)
             .ThenByDescending(r => r.AssignedAt ?? r.CreatedAt)
+            .ToList();
+
+        var activeList = ordered.Where(r => r.Status is not (RepairRequestStatus.Completed or RepairRequestStatus.Cancelled)).ToList();
+        var completedList = ordered.Where(r => r.Status is RepairRequestStatus.Completed or RepairRequestStatus.Cancelled).ToList();
+
+        var normalizedScope = scope?.Trim().ToLowerInvariant();
+        IReadOnlyList<RepairRequest> filtered = normalizedScope switch
+        {
+            "active" => activeList,
+            "completed" => completedList,
+            _ => ordered
+        };
+
+        var totalCount = filtered.Count;
+        var totalPages = totalCount == 0 ? 1 : (int)Math.Ceiling(totalCount / (double)safePageSize);
+        var effectivePage = Math.Min(safePage, totalPages);
+
+        var paged = filtered
+            .Skip((effectivePage - 1) * safePageSize)
+            .Take(safePageSize)
             .Select(r =>
             {
                 var hasOverlap = r.ScheduledStartAt.HasValue
@@ -221,7 +291,14 @@ public sealed class RepairRequestService : IRepairRequestService
             })
             .ToArray();
 
-        return Result<IReadOnlyList<ItineraryItemDto>>.Success(ordered);
+        return Result<PagedResult<ItineraryItemDto>>.Success(
+            PagedResult<ItineraryItemDto>.Create(
+                paged,
+                effectivePage,
+                safePageSize,
+                totalCount,
+                activeCount: activeList.Count,
+                secondaryCount: completedList.Count));
     }
 
     public async Task<Result<RepairDetailDto>> GetDetailAsync(

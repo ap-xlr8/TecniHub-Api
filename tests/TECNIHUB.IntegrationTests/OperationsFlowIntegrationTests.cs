@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using TECNIHUB.Application.Abstractions;
 using TECNIHUB.Application.Auth.DTOs;
 using TECNIHUB.Application.Chat;
+using TECNIHUB.Application.Common;
 using TECNIHUB.Application.PostalCodes;
 using TECNIHUB.Application.Profile;
 using TECNIHUB.Application.Repairs;
@@ -191,8 +192,10 @@ public sealed class OperationsFlowIntegrationTests : IDisposable
         var disablePart = await tech1Http.PatchAsJsonAsync($"/api/spare-parts/{createdPart.Id}/availability", new SetSparePartAvailabilityInput(false));
         Assert.Equal(HttpStatusCode.OK, disablePart.StatusCode);
 
-        var availableParts = await tech2Http.GetFromJsonAsync<List<SparePartSummaryDto>>("/api/spare-parts");
-        Assert.Empty(availableParts!);
+        var availableParts = await tech2Http.GetFromJsonAsync<PagedResult<SparePartSummaryDto>>("/api/spare-parts?page=1&pageSize=30");
+        Assert.NotNull(availableParts);
+        Assert.Empty(availableParts!.Items);
+        Assert.Equal(0, availableParts.TotalCount);
 
         // M1 regression check: soft-deleted user JWT is immediately rejected
         var deleteTech2 = await tech2Http.DeleteAsync("/api/auth/account");

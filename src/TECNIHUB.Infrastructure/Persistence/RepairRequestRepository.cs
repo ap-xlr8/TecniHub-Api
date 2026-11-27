@@ -35,25 +35,20 @@ public sealed class RepairRequestRepository : IRepairRequestRepository
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<RepairRequest>> GetOpenBoardAsync(
-        string? search,
-        string? state = null,
-        string? municipality = null,
-        string? postalCode = null,
+    public async Task<(IReadOnlyList<RepairRequest> Items, int TotalCount)> GetOpenBoardPageAsync(
+        OpenRepairBoardFilter filter,
         CancellationToken cancellationToken = default)
     {
         var query = _dbContext.RepairRequests
             .AsNoTracking()
-            .Include(r => r.ClientUser)
-            .Include(r => r.Images)
             .Where(r => r.Status == RepairRequestStatus.Open
                 && r.DeletedAt == null
                 && r.ClientUser != null
                 && r.ClientUser.Status == AccountStatus.Active);
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var term = search.Trim().ToLowerInvariant();
+            var term = filter.Search.Trim().ToLowerInvariant();
             query = query.Where(r =>
                 r.ApplianceName.ToLower().Contains(term)
                 || (r.BrandModel != null && r.BrandModel.ToLower().Contains(term))
@@ -63,28 +58,41 @@ public sealed class RepairRequestRepository : IRepairRequestRepository
                 || r.PostalCode.Contains(term));
         }
 
-        if (!string.IsNullOrWhiteSpace(state))
+        if (!string.IsNullOrWhiteSpace(filter.State))
         {
-            var st = state.Trim().ToLowerInvariant();
+            var st = filter.State.Trim().ToLowerInvariant();
             query = query.Where(r => r.State.ToLower().Contains(st));
         }
 
-        if (!string.IsNullOrWhiteSpace(municipality))
+        if (!string.IsNullOrWhiteSpace(filter.Municipality))
         {
-            var mun = municipality.Trim().ToLowerInvariant();
+            var mun = filter.Municipality.Trim().ToLowerInvariant();
             query = query.Where(r => r.Municipality.ToLower().Contains(mun));
         }
 
-        if (!string.IsNullOrWhiteSpace(postalCode))
+        if (!string.IsNullOrWhiteSpace(filter.PostalCode))
         {
-            var cp = postalCode.Trim();
+            var cp = filter.PostalCode.Trim();
             query = query.Where(r => r.PostalCode == cp);
         }
 
-        return await query
+        var totalCount = await query.CountAsync(cancellationToken);
+        var totalPages = totalCount == 0 ? 1 : (int)Math.Ceiling(totalCount / (double)filter.PageSize);
+        var effectivePage = Math.Min(Math.Max(filter.Page, 1), totalPages);
+
+        var itemsQuery = query
+            .Include(r => r.Images)
             .OrderByDescending(r => r.CreatedAt)
-            .Take(100)
-            .ToListAsync(cancellationToken);
+            .Skip((effectivePage - 1) * filter.PageSize)
+            .Take(filter.PageSize);
+
+        if (_dbContext.Database.IsRelational())
+        {
+            itemsQuery = itemsQuery.AsSplitQuery();
+        }
+
+        var items = await itemsQuery.ToListAsync(cancellationToken);
+        return (items, totalCount);
     }
 
     public async Task<IReadOnlyList<RepairRequest>> GetByAssignedTechnicianAsync(

@@ -179,7 +179,9 @@ public sealed class TecniHubDbContext : DbContext
             entity.Property(pc => pc.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.Property(pc => pc.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
-            entity.HasIndex(pc => pc.PostalCode);
+            entity.HasIndex(pc => new { pc.PostalCode, pc.Neighborhood })
+                .HasDatabaseName("ix_postal_codes_postal_code_neighborhood")
+                .IncludeProperties(pc => new { pc.State, pc.Municipality, pc.City });
         });
 
         modelBuilder.Entity<RepairRequest>(entity =>
